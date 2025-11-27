@@ -1,4 +1,10 @@
 reading/*
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
 __pycache__/*
 dataset_preparation/__pycache__/*
 model_training/__pycache__/*
