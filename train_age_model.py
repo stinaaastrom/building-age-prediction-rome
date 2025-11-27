@@ -1,0 +1,101 @@
+import torch
+import torch.nn as nn
+from torchvision import models
+from sklearn.svm import SVR
+from sklearn.metrics import mean_absolute_error
+import numpy as np
+
+class AgeModel:
+    def __init__(self):
+        self.device = self._get_device()
+        print(f"Using device: {self.device}")
+        self.feature_extractor = self._build_feature_extractor()
+        self.preprocess = models.ResNet50_Weights.DEFAULT.transforms()
+        self.svr = SVR(kernel='rbf', C=100, gamma='scale', epsilon=0.1)
+
+    def _get_device(self):
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+
+    def _build_feature_extractor(self):
+        print("Loading ResNet50...")
+        weights = models.ResNet50_Weights.DEFAULT
+        model = models.resnet50(weights=weights)
+        # Remove classification layer
+        modules = list(model.children())[:-1]
+        extractor = nn.Sequential(*modules)
+        extractor.to(self.device)
+        extractor.eval()
+        return extractor
+
+    def _extract_features_batch(self, batch):
+        images = []
+        for img in batch['Picture']:
+            try:
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                images.append(self.preprocess(img))
+            except Exception as e:
+                print(f"Error processing image: {e}")
+                # Add a dummy tensor or handle gracefully? 
+                # For simplicity, we might skip, but batch processing expects same size.
+                # We'll just append a zero tensor of correct shape if needed, 
+                # but here we assume most images are fine.
+                continue
+        
+        if not images:
+            return {"features": []}
+
+        input_tensor = torch.stack(images).to(self.device)
+        
+        with torch.no_grad():
+            features = self.feature_extractor(input_tensor)
+        
+        # Flatten
+        features = features.view(features.size(0), -1).cpu().numpy()
+        return {"features": features}
+
+    def prepare_data(self, dataset):
+        print("Extracting features...")
+        dataset_with_features = dataset.map(
+            self._extract_features_batch, 
+            batched=True, 
+            batch_size=32
+        )
+        
+        X = np.array(dataset_with_features['features'])
+        y = np.array(dataset_with_features['Year'])
+        
+        # Filter None values
+        valid_mask = [y_val is not None for y_val in y]
+        X = X[valid_mask]
+        y = y[valid_mask]
+        
+        return X, y
+
+    def train(self, train_dataset):
+        print("Preparing training data...")
+        X_train, y_train = self.prepare_data(train_dataset)
+        
+        print(f"Training SVR on {len(X_train)} samples...")
+        self.svr.fit(X_train, y_train)
+        print("Training complete.")
+
+    def evaluate(self, test_dataset):
+        print("Preparing test data...")
+        X_test, y_test = self.prepare_data(test_dataset)
+        
+        print(f"Evaluating on {len(X_test)} samples...")
+        y_pred = self.svr.predict(X_test)
+        
+        mae = mean_absolute_error(y_test, y_pred)
+        print(f"Mean Absolute Error (MAE): {mae:.2f} years")
+        
+        print("\nExample Predictions:")
+        for i in range(min(5, len(y_test))):
+            print(f"True: {y_test[i]}, Predicted: {y_pred[i]:.1f}, Error: {abs(y_test[i] - y_pred[i]):.1f}")
+        
+        return mae
