@@ -3,3 +3,6 @@ __pycache__/*
 dataset_preparation/__pycache__/*
 model_training/__pycache__/*
 result_visualization/__pycache__/*
+result_visualization/.DS_Store
+resources/.DS_Store
+.DS_Store

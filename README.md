@@ -14,3 +14,6 @@ https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.g
 This GeoJSON is used by `filter_Italy_dataset.py` (via Shapely) to perform precise
 point-in-polygon checks to determine whether image coordinates fall within Italy's
 official land boundaries.
+
+The visual of the Italian borders is taken from a geojson.io render based on the extracted
+polygon edges.
