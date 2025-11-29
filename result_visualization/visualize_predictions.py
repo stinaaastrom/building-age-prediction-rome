@@ -1,12 +1,17 @@
 import matplotlib.pyplot as plt
 import random
 import numpy as np
+from pathlib import Path
+from datetime import datetime
 
 class PredictionVisualizer:
     def __init__(self, model):
         self.model = model
 
-    def visualize(self, dataset, num_samples=3, output_path="prediction_visualization.png"):
+    def visualize(self, dataset, output_path: Path, num_samples=3):
+
+        
+
         print(f"Visualizing {num_samples} random predictions...")
         
         # Ensure we have enough samples
@@ -27,6 +32,7 @@ class PredictionVisualizer:
         
         # Setup plot
         fig, axes = plt.subplots(1, num_samples, figsize=(5 * num_samples, 6))
+        
         if num_samples == 1:
             axes = [axes]
             
@@ -35,7 +41,7 @@ class PredictionVisualizer:
             features = item['features']
             year_true = item['Year']
             img = item['Picture']
-            desc = item.get('Description', 'No description')
+            name = item.get('Building', 'No description')
             
             # Handle missing data
             if year_true is None:
@@ -57,20 +63,29 @@ class PredictionVisualizer:
             ax.imshow(img)
             ax.axis('off')
             
-            # Prepare Text
-            # Shorten description for display
-            short_desc = (desc[:100] + '...') if len(desc) > 100 else desc
-            
             title_text = (
                 f"True Year: {year_true}\n"
                 f"Predicted: {year_pred:.0f}\n"
                 f"Error: {abs(year_true - year_pred):.0f} years\n\n"
-                f"Context: {short_desc}"
+                f"Context: {name}"
             )
             
             ax.set_title(title_text, fontsize=10, wrap=True)
             
         plt.tight_layout()
-        plt.savefig(output_path)
-        print(f"Visualization saved to {output_path}")
-        # plt.show() # Optional, might not work in all envs
+
+        # Ensure output_path is a directory. If it exists but is a file -> error.
+        if output_path.exists() and not output_path.is_dir():
+            raise ValueError(f"Output path '{output_path}' exists and is not a directory")
+
+        # Create directory if it doesn't exist
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Generate timestamped filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"predictions_{timestamp}.png"
+        save_path = output_path / filename
+
+        # Save figure
+        plt.savefig(save_path)
+        print(f"Visualization saved to {save_path}")
