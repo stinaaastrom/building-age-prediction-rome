@@ -17,3 +17,10 @@ official land boundaries.
 
 The visual of the Italian borders is taken from a geojson.io render based on the extracted
 polygon edges.
+
+Known issues:
+- too few images (more would be better)
+- pictures of construction sites (Church of Gesù, Mirandola)
+- aerial pictures not showing much façade (Vatican Museums)
+- pictures from inside the building (Palaindoor di Ancona)
+- drawings of buildings (San Sebastiano, Milan)

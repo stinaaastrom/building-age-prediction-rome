@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
+from tools.generate_filename import Filename
+
 class PredictionVisualizer:
     def __init__(self, model):
         self.model = model
@@ -82,19 +84,8 @@ class PredictionVisualizer:
         # Create directory if it doesn't exist
         output_path.mkdir(parents=True, exist_ok=True)
 
-        # Get current git commit hash
-        try:
-            git_hash = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                cwd=output_path.parent.parent,
-                stderr=subprocess.DEVNULL
-            ).decode('utf-8').strip()
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            git_hash = "no-git"
-
         # Generate timestamped filename with git hash
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"predictions_{timestamp}_{git_hash}.jpg"
+        filename = Filename.generate('predictions') + ".jpg"
         save_path = output_path / filename
 
         # Save figure
