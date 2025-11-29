@@ -1,17 +1,20 @@
 from dataset_preparation.filter_italy_dataset import ItalyDataset
+from dataset_preparation.filter_europe_dataset import EuropeDataset
 from model_training.train_age_model import AgeModel
 from result_visualization.visualize_predictions import PredictionVisualizer
 from pathlib import Path
 
 def main():
     # Initialize Dataset Handler
-    geojson_path = Path.cwd() / 'resources' / 'italy_borders.geojson'
+    italy_geojson_path = Path.cwd() / 'resources' / 'italy_borders.geojson'
+    europe_geojson_path = Path.cwd() / 'resources' / 'europe_borders.geojson'
     dataset_name = "Morris0401/Year-Guessr-Dataset"
-    italy_data = ItalyDataset(geojson_path,dataset_name)
+    italy_data = ItalyDataset(italy_geojson_path,dataset_name)
+    europe_data = EuropeDataset(europe_geojson_path, dataset_name)
     
     # Load and Filter Data
-    train_dataset = italy_data.get_filtered_dataset(split="train")
-    test_dataset = italy_data.get_filtered_dataset(split="test")
+    train_dataset = europe_data.get_filtered_dataset(split="train")
+    test_dataset = europe_data.get_filtered_dataset(split="test")
     
     if len(train_dataset) == 0:
         print("No training data found. Exiting.")
