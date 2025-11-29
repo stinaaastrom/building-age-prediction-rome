@@ -1,13 +1,61 @@
 from datasets import load_dataset
 import json
+import urllib.request
 from pathlib import Path
 from shapely.geometry import shape, Point
 
 class ItalyDataset:
+    COUNTRIES_URL = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+    
     def __init__(self, geojson_path: Path, dataset_name: str):
         self.dataset_name = dataset_name
         self.geojson_path = geojson_path
+        self._ensure_italy_borders_exist()
         self.italy_polygon = self._load_italy_borders()
+
+    def _ensure_italy_borders_exist(self):
+        """Download and extract Italy borders if the GeoJSON file doesn't exist"""
+        if self.geojson_path.exists():
+            print(f"Italy borders file already exists at {self.geojson_path}")
+            return
+        
+        print(f"Italy borders file not found. Downloading from {self.COUNTRIES_URL}...")
+        
+        # Ensure parent directory exists
+        self.geojson_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Download full countries GeoJSON
+        try:
+            with urllib.request.urlopen(self.COUNTRIES_URL) as response:
+                countries_data = json.loads(response.read().decode('utf-8'))
+        except Exception as e:
+            raise RuntimeError(f"Failed to download countries GeoJSON: {e}")
+        
+        # Find Italy feature
+        italy_feature = None
+        for feature in countries_data.get('features', []):
+            props = feature.get('properties', {})
+            # Check multiple possible property names
+            name = props.get('ADMIN') or props.get('name') or props.get('NAME') or props.get('admin')
+            if name and 'Italy' in name:
+                italy_feature = feature
+                print(f"Found Italy: {name}")
+                break
+        
+        if not italy_feature:
+            raise RuntimeError("Italy not found in countries GeoJSON")
+        
+        # Create Italy-only FeatureCollection
+        italy_geojson = {
+            "type": "FeatureCollection",
+            "features": [italy_feature]
+        }
+        
+        # Save to file
+        with open(self.geojson_path, 'w') as f:
+            json.dump(italy_geojson, f)
+        
+        print(f"Italy borders extracted and saved to {self.geojson_path}")
 
     def _load_italy_borders(self):
         """Load Italy's geographic boundaries from GeoJSON"""
