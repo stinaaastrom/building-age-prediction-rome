@@ -105,7 +105,7 @@ class PredictionVisualizer:
                     
                     # Predict with CNN (returns normalized year)
                     year_pred_norm = self.model.cnn_model.predict([img_array, coords], verbose=0)[0][0]
-                    year_pred = self.model._denormalize_year(year_pred_norm)
+                    year_pred = self.model.denormalize_year(year_pred_norm)
                     
                     self._plot_prediction(ax, img, year_true, year_pred, name)
                     

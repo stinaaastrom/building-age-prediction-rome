@@ -65,15 +65,15 @@ class AgeConfusionMatrix:
     
     def _get_predictions_cnn(self, dataset):
         """Get predictions using CNN model."""
-        X_test_imgs, X_test_coords, y_test_norm = self.model._prepare_cnn_data(
+        X_test_imgs, X_test_coords, y_test_norm = self.model.prepare_cnn_data(
             dataset, 
-            image_size=(224, 224), 
+            image_size=(320, 320), 
             use_augmentation=False
         )
         
         predictions_norm = self.model.cnn_model.predict([X_test_imgs, X_test_coords], verbose=0).flatten()
-        predictions = self.model._denormalize_year(predictions_norm)
-        y_test = self.model._denormalize_year(y_test_norm)
+        predictions = self.model.denormalize_year(predictions_norm)
+        y_test = self.model.denormalize_year(y_test_norm)
         
         return y_test, predictions
     

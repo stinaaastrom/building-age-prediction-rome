@@ -12,10 +12,11 @@ import random
 import torch
 from torchvision import models
 import torchvision.transforms as T
+from tensorflow.keras.applications.densenet import preprocess_input
 
 # Probability that augmentation is applied during training
 AUGMENTATION_P = 0.7
-IMAGE_SIZE = 224
+IMAGE_SIZE = 320
 
 class ImageProcessing:
     """
@@ -68,33 +69,33 @@ class ImageProcessing:
         img_tensor = self.preprocess(img_resized)
 
         return img_tensor
-    
+
     def image_processing_for_cnn(self, img, use_augmentation=False):
         """
-        Process images for Keras/TensorFlow CNN models (DenseNet121).
-        
-        Returns images in channel-last format (H, W, C) as numpy arrays.
-        This is required for Keras/TensorFlow which expects (batch, height, width, channels).
+        Process images for TensorFlow/Keras CNN models (DenseNet121).
+
+        Returns images in channel-last format (H, W, C) as float32 numpy arrays
+        preprocessed with Keras' DenseNet `preprocess_input`.
         """
         # Ensure image is in RGB format
-        if img.mode != 'RGB':
+        if hasattr(img, 'mode') and img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # Apply augmentation with probability AUGMENTATION_P during training
-        if use_augmentation:
-            if random.random() < AUGMENTATION_P:
-                img = self.augmentations(img)
-        
-        # Resize to standard size (224x224)
+        # If image is a numpy array, convert to PIL for transforms
+        if isinstance(img, np.ndarray):
+            img = Image.fromarray(img)
+
+        # Apply augmentation with probability during training
+        if use_augmentation and random.random() < AUGMENTATION_P:
+            img = self.augmentations(img)
+
+        # Resize to standard size
         img_resized = self.resize(img)
-        
-        # Convert PIL Image to numpy array and scale to [0, 1]
-        img_array = np.array(img_resized).astype(np.float32) / 255.0
-        
-        # Apply ImageNet normalization (same as PyTorch preprocessing)
-        mean = np.array([0.485, 0.456, 0.406])
-        std = np.array([0.229, 0.224, 0.225])
-        img_normalized = (img_array - mean) / std
-        
-        # Return in channel-last format (H, W, C) for Keras/TensorFlow
-        return img_normalized
+
+        # Convert to array (H, W, C)
+        img_array = np.array(img_resized).astype(np.float32)
+
+        # Apply DenseNet preprocessing (expects channel-last)
+        img_processed = preprocess_input(img_array)
+
+        return img_processed

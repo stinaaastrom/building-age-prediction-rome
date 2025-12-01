@@ -26,16 +26,15 @@ def main():
     print("\n--- Applying Facade Detection Filter ---")
     print("Loading scene parsing model (SegFormer trained on ADE20K)...")
     scene_filter = SceneFilter()
-    
+
     print("\nFiltering datasets to keep only exterior building facades:")
     print("  - Excludes interior shots (walls, floors, ceilings dominant)")
-    print("  - Excludes construction sites (scaffolding, cranes)")
     print("  - Requires visible sky (exterior indicator)")
     
     # Visualize 5 rejected images from train dataset to show what gets filtered out
-    train_dataset = scene_filter.filter_dataset(train_dataset, verbose=True, visualize_rejected=5)
-    test_dataset = scene_filter.filter_dataset(test_dataset, verbose=True)
-    val_dataset = scene_filter.filter_dataset(val_dataset, verbose=True)
+    #train_dataset = scene_filter.filter_dataset(train_dataset, verbose=True, visualize_rejected=5)
+    #test_dataset = scene_filter.filter_dataset(test_dataset, verbose=True)
+    #val_dataset = scene_filter.filter_dataset(val_dataset, verbose=True)
 
     
     if len(train_dataset) == 0:
@@ -47,7 +46,7 @@ def main():
         return
     
     # Choose training method: 'svr' or 'cnn'
-    method = 'svr'  # Can be "cnn" or "svr"
+    method = 'cnn'  # Can be "cnn" or "svr"
     if method == 'svr':
         model = AgeModel()
         model_path = Path.cwd() / 'model_training' / 'cached_model.joblib'
