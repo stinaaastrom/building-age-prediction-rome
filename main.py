@@ -22,19 +22,20 @@ def main():
     test_dataset = italy_data.get_filtered_dataset(split="test")
     val_dataset = italy_data.get_filtered_dataset(split="valid")
     
-    # Apply Scene Parsing Filter (keep only building-dominant images)
-    print("\n--- Applying Scene Parsing Filter ---")
+    # Apply Scene Parsing Filter (keep only exterior building facades)
+    print("\n--- Applying Facade Detection Filter ---")
     print("Loading scene parsing model (SegFormer trained on ADE20K)...")
     scene_filter = SceneFilter()
     
-    print("\nFiltering datasets to keep only images where:")
-    print("  1) Buildings are the largest semantic category")
-    print("  2) Buildings occupy >40% of the image")
+    print("\nFiltering datasets to keep only exterior building facades:")
+    print("  - Excludes interior shots (walls, floors, ceilings dominant)")
+    print("  - Excludes construction sites (scaffolding, cranes)")
+    print("  - Requires visible sky (exterior indicator)")
     
     # Visualize 5 rejected images from train dataset to show what gets filtered out
-    train_dataset = scene_filter.filter_dataset(train_dataset, min_building_ratio=0.4, verbose=True, visualize_rejected=5)
-    test_dataset = scene_filter.filter_dataset(test_dataset, min_building_ratio=0.4, verbose=True)
-    val_dataset = scene_filter.filter_dataset(val_dataset, min_building_ratio=0.4, verbose=True)
+    train_dataset = scene_filter.filter_dataset(train_dataset, verbose=True, visualize_rejected=5)
+    test_dataset = scene_filter.filter_dataset(test_dataset, verbose=True)
+    val_dataset = scene_filter.filter_dataset(val_dataset, verbose=True)
 
     
     if len(train_dataset) == 0:
