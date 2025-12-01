@@ -4,6 +4,8 @@ from torchvision import models
 from sklearn.svm import SVR
 from sklearn.metrics import mean_absolute_error
 import numpy as np
+import joblib
+from pathlib import Path
 
 class AgeModel:
     def __init__(self):
@@ -12,6 +14,20 @@ class AgeModel:
         self.feature_extractor = self._build_feature_extractor()
         self.preprocess = models.ResNet50_Weights.DEFAULT.transforms()
         self.svr = SVR(kernel='rbf', C=100, gamma='scale', epsilon=0.1)
+
+    def save_model(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self.svr, path)
+        print(f"Model saved to {path}")
+
+    def load_model(self, path):
+        path = Path(path)
+        if path.exists():
+            self.svr = joblib.load(path)
+            print(f"Model loaded from {path}")
+            return True
+        return False
 
     def _get_device(self):
         if torch.cuda.is_available():
