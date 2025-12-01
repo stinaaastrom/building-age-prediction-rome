@@ -1,10 +1,29 @@
+# Deep Learning Frameworks
 torch
 torchvision
+tensorflow>=2.13.0
+keras>=2.13.0
+
+# Computer Vision and Image Processing
 opencv-python
-numpy
 Pillow
+
+# Data Processing
+numpy
+pandas
 duckdb
 datasets
 huggingface_hub
-matplotlib
+
+# Machine Learning
 scikit-learn
+
+# Visualization
+matplotlib
+seaborn
+
+# NLP/Transformers (for scene parsing)
+transformers
+
+# Utilities
+tqdm

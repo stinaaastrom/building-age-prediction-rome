@@ -1,5 +1,18 @@
 reading/*
 
+# Images and data files
+year_guessr_data/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+result_visualization/pictures/*.png
+result_visualization/pictures/*.jpg
+scene_filter_test_*.png
+rejected_images_visualization.png
+
 # Virtual environments
 venv/
 .venv/
@@ -13,4 +26,13 @@ result_visualization/.DS_Store
 resources/.DS_Store
 .DS_Store
 tools/__pycache__/*
+
+# Model files
 model_training/cached_model.joblib
+model_training/cnn_age_model.keras
+*.h5
+*.pkl
+*.joblib
+
+# Data files
+result_visualization/data/*.csv

@@ -94,14 +94,32 @@ class AgeModel:
         X = np.array(dataset_with_features['features'])
         y = np.array(dataset_with_features['Year'])
         
+        # Extract coordinates metadata
+        lats = []
+        lons = []
+        for item in dataset_with_features:
+            try:
+                lat = float(item.get('lat_num', 0))
+                lon = float(item.get('lon_num', 0))
+                lats.append(lat)
+                lons.append(lon)
+            except (ValueError, TypeError):
+                lats.append(0.0)
+                lons.append(0.0)
+        
+        coords = np.column_stack([lats, lons])
+        
         # Filter None values
         valid_mask = [y_val is not None for y_val in y]
         X = X[valid_mask]
         y = y[valid_mask]
+        coords = coords[valid_mask]
         
-        print(f"Feature dimensions: {X.shape[1]} image features")
+        # Concatenate image features with coordinate metadata
+        X_combined = np.concatenate([X, coords], axis=1)
+        print(f"Feature dimensions: {X.shape[1]} image + 2 coords = {X_combined.shape[1]} total")
         
-        return X, y
+        return X_combined, y
 
     def train(self, train_dataset):
         print("Preparing training data...")

@@ -1,3 +1,8 @@
+"""
+Image preprocessing module for building age prediction models.
+Provides processing pipelines for both PyTorch (SVR) and TensorFlow/Keras (CNN) models.
+"""
+
 import os
 from pathlib import Path
 import numpy as np
@@ -8,77 +13,88 @@ import torch
 from torchvision import models
 import torchvision.transforms as T
 
+# Probability that augmentation is applied during training
+AUGMENTATION_P = 0.7
+IMAGE_SIZE = 224
 
 class ImageProcessing:
+    """
+    Image preprocessing class for building age prediction.
+    Supports both PyTorch (channel-first) and Keras/TensorFlow (channel-last) formats.
+    """
 
     def __init__(self):
-        self.resize = T.Resize((224, 224))
+        """Initialize image processing pipelines and transformations."""
+        self.resize = T.Resize((IMAGE_SIZE, IMAGE_SIZE))
         self.preprocess = models.ResNet50_Weights.DEFAULT.transforms()
 
-    def apply_clahe_to_rgb(self, img):
+        # Data augmentation pipeline for training robustness
+        self.augmentations = T.Compose([
+                # Random crop provides scale invariance and robustness
+                T.RandomResizedCrop(IMAGE_SIZE, scale=(0.7, 1.0), ratio=(0.9, 1.1)),
+                # Horizontal flip for left-right invariance
+                T.RandomHorizontalFlip(p=0.5),
+                # Slight rotation to handle camera angles
+                T.RandomApply([T.RandomRotation(degrees=10)], p=0.5),
+                # Small translations and shear for position invariance
+                T.RandomApply([T.RandomAffine(degrees=0, translate=(0.05,0.05), shear=5)], p=0.3),
+                # Perspective transform makes model robust to camera viewpoints
+                T.RandomApply([T.RandomPerspective(distortion_scale=0.2, p=1.0)], p=0.3),
+                # Moderate color jittering for lighting condition robustness
+                T.ColorJitter(brightness=0.2, contrast=0.15, saturation=0.15, hue=0.05),
+                # Occasional blur to handle image quality variations
+                T.RandomApply([T.GaussianBlur(kernel_size=(3,3), sigma=(0.1,1.0))], p=0.15),
+            ])
+
+    def image_processing(self, img, use_augmentation=False):
         """
-        Apply CLAHE only to the Luminance channel (Lab color space).
-        Keeps colors natural while enhancing textures.
+        Process images for PyTorch models (ResNet50 + SVR).
+        
+        Returns images in channel-first format (C, H, W) as PyTorch tensors.
         """
-        img_np = np.array(img)
-        lab = cv2.cvtColor(img_np, cv2.COLOR_RGB2LAB)
-
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        l_clahe = clahe.apply(l)
-
-        lab_clahe = cv2.merge((l_clahe, a, b))
-        rgb_clahe = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2RGB)
-
-        return Image.fromarray(rgb_clahe)
-
-    def compute_sobel_edge_mask(self, img):
-        """Return normalized Sobel magnitude mask (0–1)."""
-        gray = cv2.GaussianBlur(np.array(img.convert('L')), (3, 3), 0)
-        sx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        sy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        mag = np.sqrt(sx**2 + sy**2)
-
-        mag_norm = (mag - mag.min()) / (mag.max() - mag.min() + 1e-8)
-        return mag_norm
-
-    def enhance_with_edges(self, img):
-        """
-        Apply texture/edge enhancement to RGB using Sobel mask.
-        Soft sharpening based on Sobel magnitude.
-        """
-        sobel = self.compute_sobel_edge_mask(img)
-        sobel = np.expand_dims(sobel, axis=2)  # shape (H, W, 1)
-
-        rgb = np.array(img).astype(np.float32) / 255.0
-
-        # Weighted blending: 20% sobel, 80% original
-        enhanced = rgb * 0.9 + sobel * 0.1
-        enhanced = np.clip(enhanced * 255, 0, 255).astype(np.uint8)
-
-        return Image.fromarray(enhanced)
-
-    def image_processing(self, img):
-        """
-        Image processing steps:
-        1. CLAHE enhancement
-        2. Light Sobel sharpening
-        3. Resize
-        4. ResNet preprocessing
-        """
+        # Ensure image is in RGB format
         if img.mode != 'RGB':
             img = img.convert('RGB')
 
-        # Step 1: CLAHE (primary enhancement)
-        # img = self.apply_clahe_to_rgb(img)
+        # Apply augmentation with probability AUGMENTATION_P during training
+        if use_augmentation:
+            if random.random() < AUGMENTATION_P:
+                img = self.augmentations(img)
 
-        # Step 2: light Sobel sharpening (secondary enhancement)
-        # img = self.enhance_with_edges(img)
-
-        # Step 3: Resize to 224x224
+        # Resize to standard size
         img_resized = self.resize(img)
-
-        # Step 4: Preprocessing for ResNet (normalization, tensor conversion)
+        
+        # Apply ResNet preprocessing (normalization, tensor conversion to channel-first)
         img_tensor = self.preprocess(img_resized)
 
         return img_tensor
+    
+    def image_processing_for_cnn(self, img, use_augmentation=False):
+        """
+        Process images for Keras/TensorFlow CNN models (DenseNet121).
+        
+        Returns images in channel-last format (H, W, C) as numpy arrays.
+        This is required for Keras/TensorFlow which expects (batch, height, width, channels).
+        """
+        # Ensure image is in RGB format
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Apply augmentation with probability AUGMENTATION_P during training
+        if use_augmentation:
+            if random.random() < AUGMENTATION_P:
+                img = self.augmentations(img)
+        
+        # Resize to standard size (224x224)
+        img_resized = self.resize(img)
+        
+        # Convert PIL Image to numpy array and scale to [0, 1]
+        img_array = np.array(img_resized).astype(np.float32) / 255.0
+        
+        # Apply ImageNet normalization (same as PyTorch preprocessing)
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        img_normalized = (img_array - mean) / std
+        
+        # Return in channel-last format (H, W, C) for Keras/TensorFlow
+        return img_normalized
