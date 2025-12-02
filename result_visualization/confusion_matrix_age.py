@@ -67,7 +67,7 @@ class AgeConfusionMatrix:
         """Get predictions using CNN model."""
         X_test_imgs, X_test_coords, y_test_norm = self.model.prepare_cnn_data(
             dataset, 
-            image_size=(320, 320), 
+            image_size=(224, 224), 
             use_augmentation=False
         )
         
