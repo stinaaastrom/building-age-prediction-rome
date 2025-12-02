@@ -12,7 +12,7 @@ class FeatureSpaceVisualizer:
     def visualize(self, dataset, output_path: Path):
         print("Extracting features for t-SNE...")
         # We use the prepare_data method which extracts features
-        X, y = self.model.prepare_data(dataset)
+        X, y = self.model.prepare_data(dataset, training=False)
         
         print(f"Extracted features shape: {X.shape}")
         

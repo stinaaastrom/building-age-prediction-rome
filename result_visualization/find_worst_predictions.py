@@ -35,10 +35,18 @@ class WorstPredictionsFinder:
                 
                 if len(features) == 0:
                     continue
+                
+                # Add coordinate features
+                lat = float(item.get('lat_num', 0))
+                lon = float(item.get('lon_num', 0))
+                coords = np.array([[lat, lon]])
+                
+                # Combine image features with coordinates
+                feat_vector = np.concatenate([features, coords], axis=1)
                     
                 # Predict
-                # features is (1, 2048)
-                pred_year = self.model.svr.predict(features)[0]
+                # feat_vector is (1, 2050) = 2048 image + 2 coords
+                pred_year = self.model.svr.predict(feat_vector)[0]
                 error = abs(year_true - pred_year)
                 
                 all_predictions.append({
