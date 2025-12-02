@@ -16,7 +16,7 @@ from tensorflow.keras.applications.densenet import preprocess_input
 
 # Probability that augmentation is applied during training
 AUGMENTATION_P = 0.7
-IMAGE_SIZE = 320
+IMAGE_SIZE = 224
 
 class ImageProcessing:
     """

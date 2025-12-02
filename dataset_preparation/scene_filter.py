@@ -8,6 +8,8 @@ import torch
 import numpy as np
 from PIL import Image
 from transformers import AutoImageProcessor, SegformerForSemanticSegmentation
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 
 class SceneFilter:
     """Filter images to keep only exterior building facades, excluding interiors and construction sites."""
@@ -101,12 +103,7 @@ class SceneFilter:
         3) Interior elements <40% - not an interior shot
         
         Note: Building doesn't need to be largest if sky is visible (allows distant buildings)
-        
-        Args:
-            image: PIL Image or numpy array
-            min_building_ratio: Minimum building proportion (default 0.15)
-            min_sky_ratio: Minimum sky proportion (default 0.05)
-            max_interior_ratio: Maximum interior elements (default 0.4)
+
             
         Returns:
             tuple: (should_keep, analysis_dict, rejection_reason)
@@ -158,14 +155,7 @@ class SceneFilter:
             'rejected_no_sky': 0,
             'rejected_other': 0
         }
-        
-        if verbose:
-            print(f"Filtering {stats['total']} images to keep only building facades...")
-            print(f"Criteria: Exterior building facades (includes distant buildings)")
-            print(f"  - Building visible ≥{min_building_ratio*100}%")
-            print(f"  - Sky visible ≥{min_sky_ratio*100}% (exterior indicator)")
-            print(f"  - Interior elements <{max_interior_ratio*100}%")
-        
+                
         for idx in range(len(dataset)):
             item = dataset[idx]
             image = item.get('Picture') or item.get('image')
@@ -274,8 +264,6 @@ def visualize_segmentation(image, scene_filter, save_path=None):
         scene_filter: SceneFilter instance
         save_path: Optional path to save visualization
     """
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import ListedColormap
     
     # Convert numpy array to PIL if needed
     if isinstance(image, np.ndarray):
