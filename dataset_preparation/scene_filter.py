@@ -4,12 +4,18 @@ Filters out interior shots and construction sites.
 Uses a model trained on ADE20K dataset (150 categories).
 """
 
+import os
+import re
 import torch
 import numpy as np
 from PIL import Image
 from transformers import AutoImageProcessor, SegformerForSemanticSegmentation
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tools.generate_filename import get_project_root, generate_filename
 
 class SceneFilter:
     """Filter images to keep only exterior building facades, excluding interiors and construction sites."""
@@ -18,7 +24,7 @@ class SceneFilter:
         """Initialize the scene parsing model trained on ADE20K."""
         # Using SegFormer trained on ADE20K (150 categories)
         model_name = "nvidia/segformer-b0-finetuned-ade-512-512"
-        self.processor = AutoImageProcessor.from_pretrained(model_name)
+        self.processor = AutoImageProcessor.from_pretrained(model_name, use_fast=True)
         self.model = SegformerForSemanticSegmentation.from_pretrained(model_name)
         self.model.eval()
         
@@ -93,7 +99,7 @@ class SceneFilter:
             'pred_seg': pred_seg
         }
     
-    def should_keep_image(self, image, min_building_ratio=0.15, min_sky_ratio=0.05, max_interior_ratio=0.4):
+    def should_keep_image(self, image, min_building_ratio=0.15, min_sky_ratio=0.00, max_interior_ratio=0.4):
         """
         Determine if image is an exterior building facade (not interior).
         
@@ -130,7 +136,7 @@ class SceneFilter:
         
         return is_facade, analysis, rejection_reason
     
-    def filter_dataset(self, dataset, min_building_ratio=0.15, min_sky_ratio=0.05, max_interior_ratio=0.4, verbose=True, visualize_rejected=0):
+    def filter_dataset(self, dataset, min_building_ratio=0.15, min_sky_ratio=0.05, max_interior_ratio=0.4, verbose=True, visualize_rejected=0, dump_images: bool = False):
         """
         Filter a dataset to keep only exterior building facade images.
         More permissive to include distant buildings.
@@ -142,6 +148,7 @@ class SceneFilter:
             max_interior_ratio: Maximum interior elements (default 0.4)
             verbose: Print progress information
             visualize_rejected: Number of rejected images to visualize (default 0)
+            dump_images: Save images to dataset_scene_filter/accepted and dataset_scene_filter/rejected folders
             
         Returns:
             Filtered dataset
@@ -155,6 +162,29 @@ class SceneFilter:
             'rejected_no_sky': 0,
             'rejected_other': 0
         }
+        
+        # Setup dump directories if needed
+        if dump_images:
+            # Generate unique folder name with timestamp and git hash
+            folder_name = generate_filename("scene_filter")
+            pictures_dir = get_project_root() / "result_visualization" / "pictures"
+            base_dir = pictures_dir / folder_name
+            accepted_dir = base_dir / "accepted"
+            rejected_base_dir = base_dir / "rejected"
+            rejected_dirs = {
+                'low_building': rejected_base_dir / "low_building_ratio",
+                'no_sky': rejected_base_dir / "no_sky_visible",
+                'interior': rejected_base_dir / "interior_elements",
+                'other': rejected_base_dir / "other"
+            }
+            
+            # Create directories
+            accepted_dir.mkdir(parents=True, exist_ok=True)
+            for dir_path in rejected_dirs.values():
+                dir_path.mkdir(parents=True, exist_ok=True)
+            
+            if verbose:
+                print(f"Dumping images to {base_dir}/")
                 
         for idx in range(len(dataset)):
             item = dataset[idx]
@@ -167,9 +197,18 @@ class SceneFilter:
                 image, min_building_ratio, min_sky_ratio, max_interior_ratio
             )
             
+            # Get building description for filename
+            building_name = item.get('Building', f'image_{idx}')
+            # Sanitize filename: remove/replace invalid characters
+            safe_filename = self._sanitize_filename(building_name)
+            
             if is_facade:
                 kept_indices.append(idx)
                 stats['kept'] += 1
+                
+                # Save accepted image
+                if dump_images:
+                    self._save_image(image, accepted_dir, safe_filename, idx)
             else:
                 # Store rejected samples for visualization
                 if len(rejected_samples) < visualize_rejected:
@@ -181,13 +220,23 @@ class SceneFilter:
                         'idx': idx
                     })
                 
-                # Categorize rejection
-                if "interior" in rejection_reason.lower():
-                    stats['rejected_interior'] += 1
+                # Categorize rejection and save if dumping
+                if "Building only" in rejection_reason:
+                    stats['rejected_other'] += 1
+                    rejection_category = 'low_building'
                 elif "sky" in rejection_reason.lower():
                     stats['rejected_no_sky'] += 1
+                    rejection_category = 'no_sky'
+                elif "interior" in rejection_reason.lower():
+                    stats['rejected_interior'] += 1
+                    rejection_category = 'interior'
                 else:
                     stats['rejected_other'] += 1
+                    rejection_category = 'other'
+                
+                # Save rejected image
+                if dump_images:
+                    self._save_image(image, rejected_dirs[rejection_category], safe_filename, idx)
             
             # Progress update
             if verbose and (idx + 1) % 100 == 0:
@@ -209,6 +258,69 @@ class SceneFilter:
         # Return filtered dataset
         filtered_dataset = dataset.select(kept_indices)
         return filtered_dataset
+    
+    @staticmethod
+    def _sanitize_filename(filename: str) -> str:
+        """
+        Sanitize a string to be used as a filename.
+        Removes or replaces invalid characters.
+        """
+        if not filename:
+            return "unknown"
+        
+        # Replace common problematic characters
+        filename = str(filename)
+        # Remove or replace characters that are invalid in filenames
+        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        # Replace multiple spaces/underscores with single underscore
+        filename = re.sub(r'[\s_]+', '_', filename)
+        # Remove leading/trailing whitespace and dots
+        filename = filename.strip(' .')
+        # Limit length to avoid filesystem issues
+        if len(filename) > 200:
+            filename = filename[:200]
+        
+        return filename if filename else "unknown"
+    
+    def _save_image(self, image, directory, base_filename: str, idx: int):
+        """
+        Save an image to the specified directory.
+        Handles both PIL Images and numpy arrays.
+        
+        Args:
+            image: PIL Image or numpy array
+            directory: Path object or string to the target directory
+            base_filename: Base name for the file
+            idx: Index to append for uniqueness
+        """
+        from pathlib import Path
+        
+        # Convert numpy array to PIL if needed
+        if isinstance(image, np.ndarray):
+            image = Image.fromarray(image)
+        
+        # Ensure directory is a Path object
+        directory = Path(directory)
+        
+        # Create unique filename with index to avoid collisions
+        filename = f"{base_filename}_{idx}.jpg"
+        filepath = directory / filename
+        
+        # Handle duplicate filenames
+        counter = 1
+        while filepath.exists():
+            filename = f"{base_filename}_{idx}_{counter}.jpg"
+            filepath = directory / filename
+            counter += 1
+        
+        # Save image
+        try:
+            # Convert to RGB if necessary (e.g., RGBA images)
+            if image.mode in ('RGBA', 'P'):
+                image = image.convert('RGB')
+            image.save(filepath, 'JPEG', quality=95)
+        except Exception as e:
+            print(f"Warning: Could not save image {filepath}: {e}")
     
     def _visualize_rejected_samples(self, rejected_samples):
         """Visualize rejected images with facade analysis"""

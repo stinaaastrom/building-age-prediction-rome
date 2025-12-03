@@ -31,10 +31,9 @@ def main():
     print("  - Excludes interior shots (walls, floors, ceilings dominant)")
     print("  - Requires visible sky (exterior indicator)")
     
-    # Visualize 5 rejected images from train dataset to show what gets filtered out
-    train_dataset = scene_filter.filter_dataset(train_dataset, verbose=True, visualize_rejected=5)
-    test_dataset = scene_filter.filter_dataset(test_dataset, verbose=True)
-    val_dataset = scene_filter.filter_dataset(val_dataset, verbose=True)
+    train_dataset = scene_filter.filter_dataset(train_dataset)
+    test_dataset = scene_filter.filter_dataset(test_dataset)
+    val_dataset = scene_filter.filter_dataset(val_dataset)
 
     
     if len(train_dataset) == 0:
@@ -49,13 +48,13 @@ def main():
     method = 'svr'  # Can be "cnn" or "svr"
     if method == 'svr':
         model = AgeModel()
-        model_path = Path.cwd() / 'model_training' / 'cached_model.joblib'
+        """ model_path = Path.cwd() / 'model_training' / 'cached_model.joblib'
         
         if model.load_model(model_path):
             print("Skipping training as cached model was loaded.")
-        else:
-            print("\n--- Starting Training ---")
-            model.train(train_dataset)
+        else: """
+        print("\n--- Starting Training ---")
+        model.train(train_dataset)
     else:
         model = CNNModel()
         model_path = Path.cwd() / 'model_training' / 'cnn_age_model.keras'
@@ -70,33 +69,29 @@ def main():
     model.evaluate(test_dataset)
     
     # 6. Save model
-    model.save_model(model_path)
+    #model.save_model(model_path)
     
-
-
-    # 7. Visualize predictions
-    output_pictures = Path.cwd() / 'result_visualization' / 'pictures'
+    """ # 7. Visualize predictions
     visualizer = PredictionVisualizer(model, model_type=method)
-    visualizer.visualize(test_dataset, output_pictures, num_samples=3)
+    visualizer.visualize(test_dataset, num_samples=3)
 
     # 8. Confusion Matrix by Age Period
     print("\n--- Generating Confusion Matrix ---")
     cm_analyzer = AgeConfusionMatrix(model, model_type=method)
-    cm_analyzer.compute_confusion_matrix(test_dataset, output_pictures)
-    cm_analyzer.analyze_errors_by_period(test_dataset, output_pictures)
+    cm_analyzer.compute_confusion_matrix(test_dataset)
+    cm_analyzer.analyze_errors_by_period(test_dataset)
 
     # 9. Additional visualizations (SVR only)
     if method == 'svr':
         # Visualize Feature Space
         print("\n--- Visualizing Feature Space ---")
         feature_visualizer = FeatureSpaceVisualizer(model)
-        feature_visualizer.visualize(train_dataset, output_pictures)
+        feature_visualizer.visualize(train_dataset)
 
         # Find Worst Predictions
         print("\n--- Finding Worst Predictions ---")
-        output_data = Path.cwd() / 'result_visualization' / 'data'
         worst_finder = WorstPredictionsFinder(model)
-        worst_finder.find_worst(test_dataset, output_data)
+        worst_finder.find_worst(test_dataset) """
 
 
 if __name__ == "__main__":
