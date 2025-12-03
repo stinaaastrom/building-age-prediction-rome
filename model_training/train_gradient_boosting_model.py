@@ -1,40 +1,70 @@
 import torch
 import torch.nn as nn
-from sklearn.svm import SVR
 from sklearn.metrics import mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from torchvision import models
 from dataset_preparation.image_processing import ImageProcessing
-from tensorflow import keras
-from keras.models import Model
-from keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
-from keras.optimizers import Adam
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import joblib
 from pathlib import Path
 
-class SVRModel:
+try:
+    import lightgbm as lgb
+    USE_LIGHTGBM = True
+except ImportError:
+    from sklearn.ensemble import GradientBoostingRegressor
+    USE_LIGHTGBM = False
+    print("LightGBM not installed, falling back to sklearn GradientBoostingRegressor")
+
+
+class GradientBoostingModel:
     def __init__(self):
         self.device = self._get_device()
         print(f"Using device: {self.device}")
         self.feature_extractor = self._build_feature_extractor()
-        self.svr = SVR(kernel='rbf', C=100, gamma='scale', epsilon=0.1)
         self.scaler = StandardScaler()
-        # Separate processors: training uses augmentation, eval/test is deterministic
         self.image_processor = ImageProcessing()
+        
+        if USE_LIGHTGBM:
+            print("Using LightGBM Regressor")
+            self.model = lgb.LGBMRegressor(
+                n_estimators=1000,
+                learning_rate=0.05,
+                max_depth=10,
+                num_leaves=31,
+                min_child_samples=20,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                reg_alpha=0.1,
+                reg_lambda=0.1,
+                random_state=42,
+                n_jobs=-1,
+                verbose=-1
+            )
+        else:
+            print("Using sklearn GradientBoostingRegressor")
+            self.model = GradientBoostingRegressor(
+                n_estimators=500,
+                learning_rate=0.05,
+                max_depth=8,
+                min_samples_split=10,
+                min_samples_leaf=5,
+                subsample=0.8,
+                random_state=42,
+                verbose=1
+            )
 
     def save_model(self, path):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump({'svr': self.svr, 'scaler': self.scaler}, path)
+        joblib.dump({'model': self.model, 'scaler': self.scaler}, path)
         print(f"Model saved to {path}")
 
     def load_model(self, path):
         path = Path(path)
         if path.exists():
             saved_data = joblib.load(path)
-            self.svr = saved_data['svr']
+            self.model = saved_data['model']
             self.scaler = saved_data['scaler']
             print(f"Model loaded from {path}")
             return True
@@ -51,10 +81,7 @@ class SVRModel:
         print("Loading EfficientNet V2 Large...")
         model = models.efficientnet_v2_l(weights=models.EfficientNet_V2_L_Weights.DEFAULT)
         
-        # Use standard 3-channel RGB input (no modification needed)
-        
-        # Remove classification layer (classifier is the last module in ConvNeXt)
-        # ConvNeXt structure: features -> avgpool -> classifier
+        # Remove classification layer
         model.classifier = nn.Identity()
         model.to(self.device)
         model.eval()
@@ -64,14 +91,9 @@ class SVRModel:
         images = []
         for img in batch['Picture']:
             try:
-
                 images.append(self.image_processor.image_processing(img))
             except Exception as e:
                 print(f"Error processing image: {e}")
-                # Add a dummy tensor or handle gracefully? 
-                # For simplicity, we might skip, but batch processing expects same size.
-                # We'll just append a zero tensor of correct shape if needed, 
-                # but here we assume most images are fine.
                 continue
         
         if not images:
@@ -124,16 +146,42 @@ class SVRModel:
         
         return X_combined, y
 
-    def train(self, train_dataset):
+    def train(self, train_dataset, val_dataset=None):
         print("Preparing training data...")
         X_train, y_train = self.prepare_data(train_dataset, training=True)
         
         print("Scaling features...")
         X_train_scaled = self.scaler.fit_transform(X_train)
         
-        print(f"Training SVR on {len(X_train)} samples...")
-        self.svr.fit(X_train_scaled, y_train)
+        print(f"Training Gradient Boosting on {len(X_train)} samples...")
+        
+        if USE_LIGHTGBM and val_dataset is not None:
+            # Use validation set for early stopping with LightGBM
+            print("Preparing validation data for early stopping...")
+            X_val, y_val = self.prepare_data(val_dataset, training=False)
+            X_val_scaled = self.scaler.transform(X_val)
+            
+            self.model.fit(
+                X_train_scaled, y_train,
+                eval_set=[(X_val_scaled, y_val)],
+                eval_metric='mae',
+                callbacks=[
+                    lgb.early_stopping(stopping_rounds=50, verbose=True),
+                    lgb.log_evaluation(period=100)
+                ]
+            )
+        else:
+            self.model.fit(X_train_scaled, y_train)
+        
         print("Training complete.")
+        
+        # Print feature importance summary (top 10 features)
+        if hasattr(self.model, 'feature_importances_'):
+            importances = self.model.feature_importances_
+            top_indices = np.argsort(importances)[-10:][::-1]
+            print("\nTop 10 Feature Importances:")
+            for idx in top_indices:
+                print(f"  Feature {idx}: {importances[idx]:.4f}")
 
     def evaluate(self, test_dataset):
         print("Preparing test data...")
@@ -141,13 +189,31 @@ class SVRModel:
         
         print(f"Evaluating on {len(X_test)} samples...")
         X_test_scaled = self.scaler.transform(X_test)
-        y_pred = self.svr.predict(X_test_scaled)
+        y_pred = self.model.predict(X_test_scaled)
         
         mae = mean_absolute_error(y_test, y_pred)
         print(f"Mean Absolute Error (MAE): {mae:.2f} years")
+        
+        # Additional metrics
+        rmse = np.sqrt(np.mean((y_test - y_pred) ** 2))
+        print(f"Root Mean Squared Error (RMSE): {rmse:.2f} years")
+        
+        # Percentage within X years
+        within_10 = np.mean(np.abs(y_test - y_pred) <= 10) * 100
+        within_20 = np.mean(np.abs(y_test - y_pred) <= 20) * 100
+        within_50 = np.mean(np.abs(y_test - y_pred) <= 50) * 100
+        print(f"Within 10 years: {within_10:.1f}%")
+        print(f"Within 20 years: {within_20:.1f}%")
+        print(f"Within 50 years: {within_50:.1f}%")
         
         print("\nExample Predictions:")
         for i in range(min(5, len(y_test))):
             print(f"True: {y_test[i]}, Predicted: {y_pred[i]:.1f}, Error: {abs(y_test[i] - y_pred[i]):.1f}")
         
         return mae
+
+    def predict(self, dataset):
+        """Make predictions on a dataset without labels."""
+        X, _ = self.prepare_data(dataset, training=False)
+        X_scaled = self.scaler.transform(X)
+        return self.model.predict(X_scaled)

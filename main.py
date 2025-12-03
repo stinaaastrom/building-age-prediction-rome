@@ -2,6 +2,7 @@ from dataset_preparation.filter_italy_dataset import ItalyDataset
 from dataset_preparation.scene_filter import SceneFilter
 from model_training.train_svr_model import SVRModel
 from model_training.train_cnn_model import CNNModel
+from model_training.train_gradient_boosting_model import GradientBoostingModel
 from result_visualization.visualize_predictions import PredictionVisualizer
 from result_visualization.visualize_feature_space import FeatureSpaceVisualizer
 from result_visualization.find_worst_predictions import WorstPredictionsFinder
@@ -13,33 +14,32 @@ import pickle
 CACHE_DIR = Path.cwd() / 'dataset_preparation' / 'cache'
 
 def main():
-    model = train_model('svr', provide_dataset('train', use_cache=True), use_cache=False)
+    model = train_model('svr', provide_dataset('train', use_cache=True), use_cache=True)
     
     model.evaluate(provide_dataset('test', use_cache=True))
     
     """ # Visualize predictions
     visualizer = PredictionVisualizer(model, model_type=method)
-    visualizer.visualize(test_dataset, num_samples=3)
+    visualizer.visualize(test_dataset, num_samples=3) """
 
     # Confusion Matrix by Age Period
     print("\n--- Generating Confusion Matrix ---")
-    cm_analyzer = AgeConfusionMatrix(model, model_type=method)
-    cm_analyzer.compute_confusion_matrix(test_dataset)
-    cm_analyzer.analyze_errors_by_period(test_dataset)
+    cm_analyzer = AgeConfusionMatrix(model, model_type='svr')
+    cm_analyzer.compute_confusion_matrix(provide_dataset('test'))
+    cm_analyzer.analyze_errors_by_period(provide_dataset('test'))
 
     # Additional visualizations (SVR only)
-    if method == 'svr':
-        # Visualize Feature Space
-        print("\n--- Visualizing Feature Space ---")
-        feature_visualizer = FeatureSpaceVisualizer(model)
-        feature_visualizer.visualize(train_dataset)
+    # Visualize Feature Space
+    print("\n--- Visualizing Feature Space ---")
+    feature_visualizer = FeatureSpaceVisualizer(model)
+    feature_visualizer.visualize(provide_dataset('train'))
 
-        # Find Worst Predictions
-        print("\n--- Finding Worst Predictions ---")
-        worst_finder = WorstPredictionsFinder(model)
-        worst_finder.find_worst(test_dataset) """
+    # Find Worst Predictions
+    print("\n--- Finding Worst Predictions ---")
+    worst_finder = WorstPredictionsFinder(model)
+    worst_finder.find_worst(provide_dataset('test'))
 
-def provide_dataset(dataset_type: Literal['train','test','validate'], use_cache: bool = True):
+def provide_dataset(dataset_type: Literal['train','test','valid'], use_cache: bool = True):
     print("\n--- Loading, Filtering by Geography and Applying Facade Detection Filter ---")
     # Check for cached dataset
     cache_path = CACHE_DIR / f'{dataset_type}_dataset.pkl'
@@ -73,7 +73,7 @@ def provide_dataset(dataset_type: Literal['train','test','validate'], use_cache:
     return dataset
     
 
-def train_model(training_method: Literal['svr', 'cnn'], train_dataset, use_cache: bool = True):
+def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, use_cache: bool = True):
     print("\n--- Starting Training ---")
     
     match training_method:
@@ -94,7 +94,17 @@ def train_model(training_method: Literal['svr', 'cnn'], train_dataset, use_cache
             if use_cache and model.load_model(model_path):
                 print("Skipping training as cached model was loaded.")
             else:
-                model.train_cnn(train_dataset, val_dataset=provide_dataset('validate', use_cache=True), epochs=20, batch_size=64)
+                model.train_cnn(train_dataset, val_dataset=provide_dataset('valid', use_cache=True), epochs=20, batch_size=64)
+                model.save_model(model_path)
+        
+        case 'gbm':
+            model = GradientBoostingModel()
+            model_path = Path.cwd() / 'model_training' / 'gbm.joblib'
+            
+            if use_cache and model.load_model(model_path):
+                print("Skipping training as cached model was loaded.")
+            else:
+                model.train(train_dataset, val_dataset=provide_dataset('valid', use_cache=True))
                 model.save_model(model_path)
     
     return model
