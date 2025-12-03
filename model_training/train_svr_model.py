@@ -13,7 +13,7 @@ from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import joblib
 from pathlib import Path
 
-class AgeModel:
+class SVRModel:
     def __init__(self):
         self.device = self._get_device()
         print(f"Using device: {self.device}")
@@ -44,18 +44,17 @@ class AgeModel:
         return torch.device("cpu")
 
     def _build_feature_extractor(self):
-        print("Loading ResNet50...")
-        weights = models.ResNet50_Weights.DEFAULT
-        model = models.resnet50(weights=weights)
+        print("Loading ConvNeXt Large...")
+        model = models.efficientnet_v2_l(weights=EfficientNet_V2_L_Weights.DEFAULT)
         
         # Use standard 3-channel RGB input (no modification needed)
         
-        # Remove classification layer
-        modules = list(model.children())[:-1]
-        extractor = nn.Sequential(*modules)
-        extractor.to(self.device)
-        extractor.eval()
-        return extractor
+        # Remove classification layer (classifier is the last module in ConvNeXt)
+        # ConvNeXt structure: features -> avgpool -> classifier
+        model.classifier = nn.Identity()
+        model.to(self.device)
+        model.eval()
+        return model
 
     def _extract_features_batch(self, batch, training: bool = False):
         images = []

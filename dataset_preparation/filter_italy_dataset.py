@@ -16,7 +16,6 @@ class ItalyDataset:
     def _ensure_italy_borders_exist(self):
         """Download and extract Italy borders if the GeoJSON file doesn't exist"""
         if self.geojson_path.exists():
-            print(f"Italy borders file already exists at {self.geojson_path}")
             return
         
         print(f"Italy borders file not found. Downloading from {self.COUNTRIES_URL}...")
@@ -65,7 +64,6 @@ class ItalyDataset:
         # Convert GeoJSON to Shapely geometry
         italy_feature = data['features'][0]
         italy_polygon = shape(italy_feature['geometry'])
-        print("Italy borders loaded successfully")
         return italy_polygon
 
     def _parse_coordinate(self, coord_str, hemisphere_indicators):

@@ -11,6 +11,7 @@ import cv2
 import random
 import torch
 from torchvision import models
+from torchvision.models import EfficientNet_V2_L_Weights
 import torchvision.transforms as T
 from tensorflow.keras.applications.densenet import preprocess_input
 
@@ -27,7 +28,7 @@ class ImageProcessing:
     def __init__(self):
         """Initialize image processing pipelines and transformations."""
         self.resize = T.Resize((IMAGE_SIZE, IMAGE_SIZE))
-        self.preprocess = models.ResNet50_Weights.DEFAULT.transforms()
+        self.preprocess = EfficientNet_V2_L_Weights.DEFAULT.transforms()
 
         # Data augmentation pipeline for training robustness
         self.augmentations = T.Compose([
@@ -49,7 +50,7 @@ class ImageProcessing:
 
     def image_processing(self, img, use_augmentation=False):
         """
-        Process images for PyTorch models (ResNet50 + SVR).
+        Process images for PyTorch models.
         
         Returns images in channel-first format (C, H, W) as PyTorch tensors.
         """
@@ -65,7 +66,7 @@ class ImageProcessing:
         # Resize to standard size
         img_resized = self.resize(img)
         
-        # Apply ResNet preprocessing (normalization, tensor conversion to channel-first)
+        # Apply preprocessing (normalization, tensor conversion to channel-first)
         img_tensor = self.preprocess(img_resized)
 
         return img_tensor
