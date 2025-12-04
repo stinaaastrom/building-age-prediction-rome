@@ -5,6 +5,7 @@ from model_training.train_cnn_model import CNNModel
 from model_training.train_gradient_boosting_model import GradientBoostingModel
 from result_visualization.visualize_predictions import PredictionVisualizer
 from result_visualization.visualize_feature_space import FeatureSpaceVisualizer
+from result_visualization.visualize_errors_geographically import GeographicErrorVisualizer
 from result_visualization.find_worst_predictions import WorstPredictionsFinder
 from result_visualization.confusion_matrix_age import AgeConfusionMatrix
 from pathlib import Path
@@ -27,6 +28,12 @@ def main():
     cm_analyzer = AgeConfusionMatrix(model, model_type='svr')
     cm_analyzer.compute_confusion_matrix(provide_dataset('test'))
     cm_analyzer.analyze_errors_by_period(provide_dataset('test'))
+
+    # Visualize Geographic Error Distribution
+    print("\n--- Visualizing Geographic Error Distribution ---")
+    geo_error_visualizer = GeographicErrorVisualizer(model)
+    geo_error_visualizer.visualize_errors_on_map(provide_dataset('test'))
+    geo_error_visualizer.visualize_error_density_regions(provide_dataset('test'))
 
     # Additional visualizations (SVR only)
     # Visualize Feature Space
