@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 from pathlib import Path
-from tools.generate_filename import Filename
+from tools.generate_filename import generate_filename, get_project_root
 
 
 class AgeConfusionMatrix:
@@ -77,13 +77,12 @@ class AgeConfusionMatrix:
         
         return y_test, predictions
     
-    def compute_confusion_matrix(self, dataset, output_path: Path):
+    def compute_confusion_matrix(self, dataset):
         """
         Compute and visualize confusion matrix for age periods.
         
         Args:
             dataset: Test dataset
-            output_path: Directory to save visualization
         """
         print("\n--- Computing Confusion Matrix for Age Periods ---")
         
@@ -136,9 +135,10 @@ class AgeConfusionMatrix:
         
         plt.tight_layout()
         
-        # Save figure
+        # Save figure to pictures directory
+        output_path = get_project_root() / 'result_visualization' / 'pictures'
         output_path.mkdir(parents=True, exist_ok=True)
-        filename = Filename.generate('confusion_matrix')
+        filename = generate_filename('confusion_matrix')
         filepath = output_path / (filename + '.png')
         plt.savefig(filepath, dpi=150, bbox_inches='tight')
         print(f"Saved confusion matrix to {filepath}")
@@ -178,7 +178,7 @@ class AgeConfusionMatrix:
         
         return cm, cm_normalized
     
-    def analyze_errors_by_period(self, dataset, output_path: Path, top_n=10):
+    def analyze_errors_by_period(self, dataset, top_n=10):
         """
         Analyze which periods have the largest errors.
         
@@ -224,9 +224,10 @@ class AgeConfusionMatrix:
         
         plt.tight_layout()
         
-        # Save figure
+        # Save figure to pictures directory
+        output_path = get_project_root() / 'result_visualization' / 'pictures'
         output_path.mkdir(parents=True, exist_ok=True)
-        filename = Filename.generate('error_by_period')
+        filename = generate_filename('error_by_period')
         filepath = output_path / (filename + '.png')
         plt.savefig(filepath, dpi=150, bbox_inches='tight')
         print(f"Saved error distribution to {filepath}")

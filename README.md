@@ -24,3 +24,4 @@ Known issues:
 - aerial pictures not showing much façade (Vatican Museums)
 - pictures from inside the building (Palaindoor di Ancona)
 - drawings of buildings (San Sebastiano, Milan)
+- 'feature-sparse' buildings with smooth surfaces (Basilica of Santa Maria a Pie' di Chienti)

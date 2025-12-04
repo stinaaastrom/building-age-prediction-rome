@@ -2,14 +2,14 @@ import csv
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
-from tools.generate_filename import Filename 
+from tools.generate_filename import generate_filename, get_project_root
 from tools.generate_sql_filter import SQL_Where
 
 class WorstPredictionsFinder:
     def __init__(self, model):
         self.model = model
 
-    def find_worst(self, dataset, output_path: Path, top_n=20):
+    def find_worst(self, dataset, top_n=20):
         print(f"Finding top {top_n} worst predictions...")
         
         all_predictions = []
@@ -65,10 +65,10 @@ class WorstPredictionsFinder:
         # Take top N
         worst = all_predictions[:top_n]
         
-        # Ensure output directory exists
+        # Save CSV to data directory
+        output_path = get_project_root() / 'result_visualization' / 'data'
         output_path.mkdir(parents=True, exist_ok=True)
-
-        filename = Filename.generate('worst_predictions')
+        filename = generate_filename('worst_predictions')
         csv_file = output_path / (filename + '.csv')
         
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:

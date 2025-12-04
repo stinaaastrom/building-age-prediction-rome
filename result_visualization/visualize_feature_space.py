@@ -3,13 +3,13 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from pathlib import Path
-from tools.generate_filename import Filename
+from tools.generate_filename import generate_filename, get_project_root
 
 class FeatureSpaceVisualizer:
     def __init__(self, model):
         self.model = model
 
-    def visualize(self, dataset, output_path: Path):
+    def visualize(self, dataset):
         print("Extracting features for t-SNE...")
         # We use the prepare_data method which extracts features
         X, y = self.model.prepare_data(dataset, training=False)
@@ -34,10 +34,10 @@ class FeatureSpaceVisualizer:
         plt.xlabel('t-SNE Dimension 1')
         plt.ylabel('t-SNE Dimension 2')
         
-        # Ensure directory exists
+        # Save figure to pictures directory
+        output_path = get_project_root() / 'result_visualization' / 'pictures'
         output_path.mkdir(parents=True, exist_ok=True)
-
-        save_path = output_path / (Filename.generate('feature_space_tsne') + '.jpg')
+        save_path = output_path / (generate_filename('feature_space_tsne') + '.jpg')
 
         plt.savefig(save_path)
         print(f"Visualization saved to {save_path}")

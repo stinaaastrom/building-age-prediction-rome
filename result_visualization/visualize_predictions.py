@@ -1,11 +1,9 @@
 import matplotlib.pyplot as plt
 import random
 import numpy as np
-import subprocess
 from pathlib import Path
-from datetime import datetime
 
-from tools.generate_filename import Filename
+from tools.generate_filename import generate_filename, get_project_root
 
 class PredictionVisualizer:
     def __init__(self, model, model_type='svr'):
@@ -19,9 +17,7 @@ class PredictionVisualizer:
         self.model = model
         self.model_type = model_type
 
-    def visualize(self, dataset, output_path: Path, num_samples=3):
-
-        
+    def visualize(self, dataset, num_samples=3):
 
         print(f"Visualizing {num_samples} random predictions...")
         
@@ -116,15 +112,11 @@ class PredictionVisualizer:
         
         plt.tight_layout()
 
-        # Ensure output_path is a directory
-        if output_path.exists() and not output_path.is_dir():
-            raise ValueError(f"Output path '{output_path}' exists and is not a directory")
-
-        # Create directory if it doesn't exist
+        # Save figure to pictures directory
+        output_path = get_project_root() / 'result_visualization' / 'pictures'
         output_path.mkdir(parents=True, exist_ok=True)
         
-        # Save figure
-        filename = Filename.generate('predictions')
+        filename = generate_filename('predictions')
         filepath = output_path / (filename + '.png')
         plt.savefig(filepath, dpi=150, bbox_inches='tight')
         print(f"Saved visualization to {filepath}")

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from sklearn.svm import SVR
 from sklearn.metrics import mean_absolute_error
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 from torchvision import models
 from dataset_preparation.image_processing import ImageProcessing
@@ -13,25 +14,28 @@ from keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import joblib
 from pathlib import Path
 
-class AgeModel:
+class SVRModel:
     def __init__(self):
         self.device = self._get_device()
         print(f"Using device: {self.device}")
         self.feature_extractor = self._build_feature_extractor()
         self.svr = SVR(kernel='rbf', C=100, gamma='scale', epsilon=0.1)
+        self.scaler = StandardScaler()
         # Separate processors: training uses augmentation, eval/test is deterministic
         self.image_processor = ImageProcessing()
 
     def save_model(self, path):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.svr, path)
+        joblib.dump({'svr': self.svr, 'scaler': self.scaler}, path)
         print(f"Model saved to {path}")
 
     def load_model(self, path):
         path = Path(path)
         if path.exists():
-            self.svr = joblib.load(path)
+            saved_data = joblib.load(path)
+            self.svr = saved_data['svr']
+            self.scaler = saved_data['scaler']
             print(f"Model loaded from {path}")
             return True
         return False
@@ -44,18 +48,17 @@ class AgeModel:
         return torch.device("cpu")
 
     def _build_feature_extractor(self):
-        print("Loading ResNet50...")
-        weights = models.ResNet50_Weights.DEFAULT
-        model = models.resnet50(weights=weights)
+        print("Loading EfficientNet V2 Large...")
+        model = models.efficientnet_v2_l(weights=models.EfficientNet_V2_L_Weights.DEFAULT)
         
         # Use standard 3-channel RGB input (no modification needed)
         
-        # Remove classification layer
-        modules = list(model.children())[:-1]
-        extractor = nn.Sequential(*modules)
-        extractor.to(self.device)
-        extractor.eval()
-        return extractor
+        # Remove classification layer (classifier is the last module in ConvNeXt)
+        # ConvNeXt structure: features -> avgpool -> classifier
+        model.classifier = nn.Identity()
+        model.to(self.device)
+        model.eval()
+        return model
 
     def _extract_features_batch(self, batch, training: bool = False):
         images = []
@@ -125,8 +128,11 @@ class AgeModel:
         print("Preparing training data...")
         X_train, y_train = self.prepare_data(train_dataset, training=True)
         
+        print("Scaling features...")
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        
         print(f"Training SVR on {len(X_train)} samples...")
-        self.svr.fit(X_train, y_train)
+        self.svr.fit(X_train_scaled, y_train)
         print("Training complete.")
 
     def evaluate(self, test_dataset):
@@ -134,7 +140,8 @@ class AgeModel:
         X_test, y_test = self.prepare_data(test_dataset, training=False)
         
         print(f"Evaluating on {len(X_test)} samples...")
-        y_pred = self.svr.predict(X_test)
+        X_test_scaled = self.scaler.transform(X_test)
+        y_pred = self.svr.predict(X_test_scaled)
         
         mae = mean_absolute_error(y_test, y_pred)
         print(f"Mean Absolute Error (MAE): {mae:.2f} years")

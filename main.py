@@ -1,102 +1,113 @@
 from dataset_preparation.filter_italy_dataset import ItalyDataset
-from dataset_preparation.filter_europe_dataset import EuropeDataset
 from dataset_preparation.scene_filter import SceneFilter
-from model_training.train_age_model import AgeModel
+from model_training.train_svr_model import SVRModel
 from model_training.train_cnn_model import CNNModel
+from model_training.train_gradient_boosting_model import GradientBoostingModel
 from result_visualization.visualize_predictions import PredictionVisualizer
 from result_visualization.visualize_feature_space import FeatureSpaceVisualizer
 from result_visualization.find_worst_predictions import WorstPredictionsFinder
 from result_visualization.confusion_matrix_age import AgeConfusionMatrix
 from pathlib import Path
+from typing import Literal
+import pickle
+
+CACHE_DIR = Path.cwd() / 'dataset_preparation' / 'cache'
 
 def main():
+    model = train_model('svr', provide_dataset('train', use_cache=True), use_cache=True)
+    
+    model.evaluate(provide_dataset('test', use_cache=True))
+    
+    """ # Visualize predictions
+    visualizer = PredictionVisualizer(model, model_type=method)
+    visualizer.visualize(test_dataset, num_samples=3) """
+
+    # Confusion Matrix by Age Period
+    print("\n--- Generating Confusion Matrix ---")
+    cm_analyzer = AgeConfusionMatrix(model, model_type='svr')
+    cm_analyzer.compute_confusion_matrix(provide_dataset('test'))
+    cm_analyzer.analyze_errors_by_period(provide_dataset('test'))
+
+    # Additional visualizations (SVR only)
+    # Visualize Feature Space
+    print("\n--- Visualizing Feature Space ---")
+    feature_visualizer = FeatureSpaceVisualizer(model)
+    feature_visualizer.visualize(provide_dataset('train'))
+
+    # Find Worst Predictions
+    print("\n--- Finding Worst Predictions ---")
+    worst_finder = WorstPredictionsFinder(model)
+    worst_finder.find_worst(provide_dataset('test'))
+
+def provide_dataset(dataset_type: Literal['train','test','valid'], use_cache: bool = True):
+    print("\n--- Loading, Filtering by Geography and Applying Facade Detection Filter ---")
+    # Check for cached dataset
+    cache_path = CACHE_DIR / f'{dataset_type}_dataset.pkl'
+    
+    if use_cache and cache_path.exists():
+        print(f"\n--- Loading cached {dataset_type} dataset from {cache_path} ---")
+        with open(cache_path, 'rb') as f:
+            dataset = pickle.load(f)
+        return dataset
+    
     # Initialize Dataset Handler
     italy_geojson_path = Path.cwd() / 'resources' / 'italy_borders.geojson'
-    europe_geojson_path = Path.cwd() / 'resources' / 'europe_borders.geojson'
     dataset_name = "Morris0401/Year-Guessr-Dataset"
-    italy_data = ItalyDataset(italy_geojson_path,dataset_name)
-    
-    # Load and Filter Data by Geography
-    print("\n--- Loading and Filtering by Geography ---")
-    train_dataset = italy_data.get_filtered_dataset(split="train")
-    test_dataset = italy_data.get_filtered_dataset(split="test")
-    val_dataset = italy_data.get_filtered_dataset(split="valid")
-    
-    # Apply Scene Parsing Filter (keep only exterior building facades)
-    print("\n--- Applying Facade Detection Filter ---")
+    italy_data = ItalyDataset(italy_geojson_path, dataset_name)
+
     print("Loading scene parsing model (SegFormer trained on ADE20K)...")
     scene_filter = SceneFilter()
 
-    print("\nFiltering datasets to keep only exterior building facades:")
+    print("Filtering datasets to keep only exterior building facades:")
     print("  - Excludes interior shots (walls, floors, ceilings dominant)")
     print("  - Requires visible sky (exterior indicator)")
-    
-    # Visualize 5 rejected images from train dataset to show what gets filtered out
-    train_dataset = scene_filter.filter_dataset(train_dataset, verbose=True, visualize_rejected=5)
-    test_dataset = scene_filter.filter_dataset(test_dataset, verbose=True)
-    val_dataset = scene_filter.filter_dataset(val_dataset, verbose=True)
 
+    dataset = italy_data.get_filtered_dataset(split=dataset_type)
+    dataset = scene_filter.filter_dataset(dataset)
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"\n--- Saving {dataset_type} dataset to cache: {cache_path} ---")
+    with open(cache_path, 'wb') as f:
+        pickle.dump(dataset, f)
+
+    return dataset
     
-    if len(train_dataset) == 0:
-        print("No training data found. Exiting.")
-        return
+
+def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, use_cache: bool = True):
+    print("\n--- Starting Training ---")
+    
+    match training_method:
+        case 'svr':
+            model = SVRModel()
+            model_path = Path.cwd() / 'model_training' / 'svm.joblib'
+
+            if use_cache and model.load_model(model_path):
+                print("Skipping training as cached model was loaded.")
+            else:
+                model.train(train_dataset)
+                model.save_model(model_path)
         
-    if len(test_dataset) == 0:
-        print("No test data found. Exiting.")
-        return
-    
-    # Choose training method: 'svr' or 'cnn'
-    method = 'svr'  # Can be "cnn" or "svr"
-    if method == 'svr':
-        model = AgeModel()
-        model_path = Path.cwd() / 'model_training' / 'cached_model.joblib'
+        case 'cnn':
+            model = CNNModel()
+            model_path = Path.cwd() / 'model_training' / 'cnn_age_model.keras'
+            
+            if use_cache and model.load_model(model_path):
+                print("Skipping training as cached model was loaded.")
+            else:
+                model.train_cnn(train_dataset, val_dataset=provide_dataset('valid', use_cache=True), epochs=20, batch_size=64)
+                model.save_model(model_path)
         
-        if model.load_model(model_path):
-            print("Skipping training as cached model was loaded.")
-        else:
-            print("\n--- Starting Training ---")
-            model.train(train_dataset)
-    else:
-        model = CNNModel()
-        model_path = Path.cwd() / 'model_training' / 'cnn_age_model.keras'
-        if model.load_model(model_path):
-            print("Skipping training as cached model was loaded.")
-        else:
-            print("\n--- Starting CNN Training ---")
-            model.train_cnn(train_dataset, val_dataset=val_dataset, epochs=20, batch_size=64)
-        
-    # 5. Evaluate
-    print("\n--- Starting Evaluation ---")
-    model.evaluate(test_dataset)
+        case 'gbm':
+            model = GradientBoostingModel()
+            model_path = Path.cwd() / 'model_training' / 'gbm.joblib'
+            
+            if use_cache and model.load_model(model_path):
+                print("Skipping training as cached model was loaded.")
+            else:
+                model.train(train_dataset, val_dataset=provide_dataset('valid', use_cache=True))
+                model.save_model(model_path)
     
-    # 6. Save model
-    model.save_model(model_path)
-    
-
-
-    # 7. Visualize predictions
-    output_pictures = Path.cwd() / 'result_visualization' / 'pictures'
-    visualizer = PredictionVisualizer(model, model_type=method)
-    visualizer.visualize(test_dataset, output_pictures, num_samples=3)
-
-    # 8. Confusion Matrix by Age Period
-    print("\n--- Generating Confusion Matrix ---")
-    cm_analyzer = AgeConfusionMatrix(model, model_type=method)
-    cm_analyzer.compute_confusion_matrix(test_dataset, output_pictures)
-    cm_analyzer.analyze_errors_by_period(test_dataset, output_pictures)
-
-    # 9. Additional visualizations (SVR only)
-    if method == 'svr':
-        # Visualize Feature Space
-        print("\n--- Visualizing Feature Space ---")
-        feature_visualizer = FeatureSpaceVisualizer(model)
-        feature_visualizer.visualize(train_dataset, output_pictures)
-
-        # Find Worst Predictions
-        print("\n--- Finding Worst Predictions ---")
-        output_data = Path.cwd() / 'result_visualization' / 'data'
-        worst_finder = WorstPredictionsFinder(model)
-        worst_finder.find_worst(test_dataset, output_data)
+    return model
 
 
 if __name__ == "__main__":
