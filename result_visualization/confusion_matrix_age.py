@@ -59,6 +59,11 @@ class AgeConfusionMatrix:
     def _get_predictions_svr(self, dataset):
         """Get predictions using SVR model."""
         X_test, y_test = self.model.prepare_data(dataset, training=False)
+        
+        # Scale features if scaler exists
+        if hasattr(self.model, 'scaler'):
+            X_test = self.model.scaler.transform(X_test)
+            
         y_pred = self.model.svr.predict(X_test)
         return y_test, y_pred
     
@@ -88,11 +93,9 @@ class AgeConfusionMatrix:
         # Get predictions based on model type
         if self.model_type == 'svr':
             y_true, y_pred = self._get_predictions_svr(dataset)
-            # SVR now predicts period indices directly
-            y_true_periods = y_true.astype(int)
-            y_pred_periods = np.round(y_pred).astype(int)
-            # Clamp predictions to valid range
-            y_pred_periods = np.clip(y_pred_periods, 0, len(self.age_periods) - 1)
+            # SVR predicts years, so we map them to periods
+            y_true_periods = np.array([self._assign_period(year) for year in y_true])
+            y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
         else:
             y_true, y_pred = self._get_predictions_cnn(dataset)
             # CNN still predicts years, so we map them
