@@ -43,6 +43,10 @@ class WorstPredictionsFinder:
                 
                 # Combine image features with coordinates
                 feat_vector = np.concatenate([features, coords], axis=1)
+                
+                # Scale features if scaler exists
+                if hasattr(self.model, 'scaler'):
+                    feat_vector = self.model.scaler.transform(feat_vector)
                     
                 # Predict
                 # feat_vector is (1, 2050) = 2048 image + 2 coords

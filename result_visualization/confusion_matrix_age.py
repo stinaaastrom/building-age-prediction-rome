@@ -30,12 +30,11 @@ class AgeConfusionMatrix:
         # Define age periods for grouping
         # Use None for open-ended ranges (no beginning/end)
         self.age_periods = [
-            (None, 1400, "Medieval (<1400)"),
-            (1400, 1600, "Renaissance (1400-1600)"),
-            (1600, 1750, "Baroque (1600-1750)"),
-            (1750, 1850, "Neoclassical (1750-1850)"),
-            (1850, 1920, "Industrial (1850-1920)"),
-            (1920, None, "Modern (>1920)")
+            (None, 1400, "Romanesque & Gothic (<1400)"),
+            (1400, 1600, "Renaissance (1400-1599)"),
+            (1600, 1780, "Baroque & Rococo (1600-1779)"),
+            (1780, 1945, "Neoclassicism to Modernism (1780-1944)"),
+            (1945, None, "Post-War Modern & Contemporary (>=1945)")
         ]
     
     def _assign_period(self, year):
@@ -60,6 +59,11 @@ class AgeConfusionMatrix:
     def _get_predictions_svr(self, dataset):
         """Get predictions using SVR model."""
         X_test, y_test = self.model.prepare_data(dataset, training=False)
+        
+        # Scale features if scaler exists
+        if hasattr(self.model, 'scaler'):
+            X_test = self.model.scaler.transform(X_test)
+            
         y_pred = self.model.svr.predict(X_test)
         return y_test, y_pred
     
@@ -89,12 +93,14 @@ class AgeConfusionMatrix:
         # Get predictions based on model type
         if self.model_type == 'svr':
             y_true, y_pred = self._get_predictions_svr(dataset)
+            # SVR predicts years, so we map them to periods
+            y_true_periods = np.array([self._assign_period(year) for year in y_true])
+            y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
         else:
             y_true, y_pred = self._get_predictions_cnn(dataset)
-        
-        # Convert years to period indices
-        y_true_periods = np.array([self._assign_period(year) for year in y_true])
-        y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
+            # CNN still predicts years, so we map them
+            y_true_periods = np.array([self._assign_period(year) for year in y_true])
+            y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
         
         # Filter out any out-of-range predictions
         valid_mask = (y_true_periods >= 0) & (y_pred_periods >= 0)

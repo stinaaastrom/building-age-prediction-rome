@@ -73,6 +73,11 @@ class PredictionVisualizer:
                 # Predict
                 # SVR expects 2D array (1, n_features)
                 feat_vector = feat_vector.reshape(1, -1)
+                
+                # Scale features if scaler exists
+                if hasattr(self.model, 'scaler'):
+                    feat_vector = self.model.scaler.transform(feat_vector)
+                
                 year_pred = self.model.svr.predict(feat_vector)[0]
                 
                 self._plot_prediction(ax, img, year_true, year_pred, name)
