@@ -36,84 +36,25 @@ class PredictionVisualizer:
             axes = [axes]
         
         # Process based on model type
-        if self.model_type == 'svr':
-            # Extract features for SVR
-            subset_with_features = subset.map(
-                self.model._extract_features_batch, 
-                batched=True, 
-                batch_size=num_samples
-            )
+        # Use unified predict_dataset for batch prediction if possible, 
+        # but here we need per-sample visualization.
+        # We can still use the model's prediction logic but applied to single items or small batch.
+        
+        # Let's use a small batch prediction for the subset
+        if hasattr(self.model, 'predict_dataset'):
+            y_pred_batch, y_true_batch, _ = self.model.predict_dataset(subset)
             
             for i, ax in enumerate(axes):
-                item = subset_with_features[i]
-                features = item['features']
-                year_true = item['Year']
+                item = subset[i]
                 img = item['Picture']
                 name = item.get('Building', 'No description')
-                
-                # Handle missing data
-                if year_true is None:
-                    ax.text(0.5, 0.5, "No Year Data", ha='center')
-                    ax.axis('off')
-                    continue
-                    
-                if not features:
-                    ax.text(0.5, 0.5, "Feature Extraction Failed", ha='center')
-                    ax.axis('off')
-                    continue
-
-                # Add coordinate features
-                lat = float(item.get('lat_num', 0))
-                lon = float(item.get('lon_num', 0))
-                coords = np.array([lat, lon])
-                
-                # Combine image features with coordinates
-                feat_vector = np.concatenate([features, coords])
-                
-                # Predict
-                # SVR expects 2D array (1, n_features)
-                feat_vector = feat_vector.reshape(1, -1)
-                
-                # Scale features if scaler exists
-                if hasattr(self.model, 'scaler'):
-                    feat_vector = self.model.scaler.transform(feat_vector)
-                
-                year_pred = self.model.svr.predict(feat_vector)[0]
+                year_true = y_true_batch[i]
+                year_pred = y_pred_batch[i]
                 
                 self._plot_prediction(ax, img, year_true, year_pred, name)
-                
-        else:  # CNN
-            for i, ax in enumerate(axes):
-                item = subset[i]
-                year_true = item['Year']
-                img = item['Picture']
-                name = item.get('Building', 'No description')
-                
-                # Handle missing data
-                if year_true is None:
-                    ax.text(0.5, 0.5, "No Year Data", ha='center')
-                    ax.axis('off')
-                    continue
-                
-                try:
-                    # Prepare single image and coordinates for CNN (channel-last format)
-                    img_array = self.model.image_processor.image_processing_for_cnn(img)
-                    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-                    
-                    lat = float(item.get('lat_num', 0))
-                    lon = float(item.get('lon_num', 0))
-                    coords = np.array([[lat, lon]])
-                    
-                    # Predict with CNN (returns normalized year)
-                    year_pred_norm = self.model.cnn_model.predict([img_array, coords], verbose=0)[0][0]
-                    year_pred = self.model.denormalize_year(year_pred_norm)
-                    
-                    self._plot_prediction(ax, img, year_true, year_pred, name)
-                    
-                except Exception as e:
-                    ax.text(0.5, 0.5, f"Prediction Failed\n{str(e)}", ha='center')
-                    ax.axis('off')
-                    continue
+        else:
+            # Fallback logic (should be removed if all models support predict_dataset)
+            print("Warning: Model does not support predict_dataset. Visualization might fail.")
         
         plt.tight_layout()
 

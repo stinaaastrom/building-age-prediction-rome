@@ -7,14 +7,7 @@ from torchvision import models
 from dataset_preparation.image_processing import ImageProcessing
 import joblib
 from pathlib import Path
-
-try:
-    import lightgbm as lgb
-    USE_LIGHTGBM = True
-except ImportError:
-    from sklearn.ensemble import GradientBoostingRegressor
-    USE_LIGHTGBM = False
-    print("LightGBM not installed, falling back to sklearn GradientBoostingRegressor")
+from sklearn.ensemble import GradientBoostingRegressor
 
 
 class GradientBoostingModel:
@@ -25,34 +18,17 @@ class GradientBoostingModel:
         self.scaler = StandardScaler()
         self.image_processor = ImageProcessing()
         
-        if USE_LIGHTGBM:
-            print("Using LightGBM Regressor")
-            self.model = lgb.LGBMRegressor(
-                n_estimators=1000,
-                learning_rate=0.05,
-                max_depth=10,
-                num_leaves=31,
-                min_child_samples=20,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                reg_alpha=0.1,
-                reg_lambda=0.1,
-                random_state=42,
-                n_jobs=-1,
-                verbose=-1
-            )
-        else:
-            print("Using sklearn GradientBoostingRegressor")
-            self.model = GradientBoostingRegressor(
-                n_estimators=500,
-                learning_rate=0.05,
-                max_depth=8,
-                min_samples_split=10,
-                min_samples_leaf=5,
-                subsample=0.8,
-                random_state=42,
-                verbose=1
-            )
+        print("Using sklearn GradientBoostingRegressor")
+        self.model = GradientBoostingRegressor(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=8,
+            min_samples_split=10,
+            min_samples_leaf=5,
+            subsample=0.8,
+            random_state=42,
+            verbose=1
+        )
 
     def save_model(self, path):
         path = Path(path)
@@ -147,6 +123,13 @@ class GradientBoostingModel:
         return X_combined, y
 
     def train(self, train_dataset, val_dataset=None):
+        
+        # Combine train and validation sets to maximize training data if using sklearn
+        if val_dataset is not None:
+            print("Combining train and validation datasets for GBM training...")
+            from datasets import concatenate_datasets
+            train_dataset = concatenate_datasets([train_dataset, val_dataset])
+        
         print("Preparing training data...")
         X_train, y_train = self.prepare_data(train_dataset, training=True)
         
@@ -154,24 +137,7 @@ class GradientBoostingModel:
         X_train_scaled = self.scaler.fit_transform(X_train)
         
         print(f"Training Gradient Boosting on {len(X_train)} samples...")
-        
-        if USE_LIGHTGBM and val_dataset is not None:
-            # Use validation set for early stopping with LightGBM
-            print("Preparing validation data for early stopping...")
-            X_val, y_val = self.prepare_data(val_dataset, training=False)
-            X_val_scaled = self.scaler.transform(X_val)
-            
-            self.model.fit(
-                X_train_scaled, y_train,
-                eval_set=[(X_val_scaled, y_val)],
-                eval_metric='mae',
-                callbacks=[
-                    lgb.early_stopping(stopping_rounds=50, verbose=True),
-                    lgb.log_evaluation(period=100)
-                ]
-            )
-        else:
-            self.model.fit(X_train_scaled, y_train)
+        self.model.fit(X_train_scaled, y_train)
         
         print("Training complete.")
         
@@ -212,8 +178,19 @@ class GradientBoostingModel:
         
         return mae
 
-    def predict(self, dataset):
-        """Make predictions on a dataset without labels."""
-        X, _ = self.prepare_data(dataset, training=False)
+    def predict_dataset(self, dataset):
+        """
+        Predicts years for a given dataset.
+        Returns:
+            y_pred: Predicted years
+            y_true: Actual years
+            coords: Coordinates (lat, lon)
+        """
+        X, y_true = self.prepare_data(dataset, training=False)
         X_scaled = self.scaler.transform(X)
-        return self.model.predict(X_scaled)
+        y_pred = self.model.predict(X_scaled)
+        
+        # Extract coords from X (last 2 columns)
+        coords = X[:, -2:] 
+        
+        return y_pred, y_true, coords

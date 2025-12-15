@@ -33,55 +33,16 @@ class GeographicErrorVisualizer:
         print("Extracting predictions and coordinates...")
         
         # Get features and labels
-        X, y_true = self.model.prepare_data(dataset, training=False)
-        
-        # Get predictions
-        X_scaled = self.model.scaler.transform(X)
-        y_pred = self.model.svr.predict(X_scaled)
-        
+        # Get predictions and coordinates
+        y_pred, y_true, coords = self.model.predict_dataset(dataset)
+        lats = coords[:, 0]
+        lons = coords[:, 1]
+
         # Calculate absolute errors
         errors = np.abs(y_true - y_pred)
         
         print(f"Extracted {len(errors)} predictions")
         print(f"Error statistics - Min: {errors.min():.2f}, Max: {errors.max():.2f}, Mean: {errors.mean():.2f}")
-        
-        # Extract coordinates from dataset
-        lats = []
-        lons = []
-        for item in dataset:
-            try:
-                # Try lat_num/lon_num first (if already parsed)
-                if 'lat_num' in item and item['lat_num'] is not None:
-                    lat = float(item['lat_num'])
-                    lon = float(item['lon_num'])
-                else:
-                    # Parse from Latitude/Longitude strings
-                    lat_str = item.get('Latitude', '')
-                    lon_str = item.get('Longitude', '')
-                    
-                    # Parse latitude (format: "XX.XX°N" or similar)
-                    if '°N' in lat_str:
-                        lat = float(lat_str.replace('°N', ''))
-                    elif '°S' in lat_str:
-                        lat = -float(lat_str.replace('°S', ''))
-                    else:
-                        lat = 0.0
-                    
-                    # Parse longitude (format: "XX.XX°E" or similar)
-                    if '°E' in lon_str:
-                        lon = float(lon_str.replace('°E', ''))
-                    elif '°W' in lon_str:
-                        lon = -float(lon_str.replace('°W', ''))
-                    else:
-                        lon = 0.0
-                
-                lats.append(lat)
-                lons.append(lon)
-            except (ValueError, TypeError):
-                lats.append(0.0)
-                lons.append(0.0)
-        
-        lats = np.array(lats)
         lons = np.array(lons)
         
         # Filter valid coordinates (those in Italy region approximately)
@@ -189,54 +150,13 @@ class GeographicErrorVisualizer:
         """
         print("Creating regional error density visualization...")
         
-        # Get features and labels
-        X, y_true = self.model.prepare_data(dataset, training=False)
-        
-        # Get predictions
-        X_scaled = self.model.scaler.transform(X)
-        y_pred = self.model.svr.predict(X_scaled)
+        # Get predictions and coordinates
+        y_pred, y_true, coords = self.model.predict_dataset(dataset)
+        lats = coords[:, 0]
+        lons = coords[:, 1]
         
         # Calculate absolute errors
         errors = np.abs(y_true - y_pred)
-        
-        # Extract coordinates
-        lats = []
-        lons = []
-        for item in dataset:
-            try:
-                # Try lat_num/lon_num first (if already parsed)
-                if 'lat_num' in item and item['lat_num'] is not None:
-                    lat = float(item['lat_num'])
-                    lon = float(item['lon_num'])
-                else:
-                    # Parse from Latitude/Longitude strings
-                    lat_str = item.get('Latitude', '')
-                    lon_str = item.get('Longitude', '')
-                    
-                    # Parse latitude (format: "XX.XX°N" or similar)
-                    if '°N' in lat_str:
-                        lat = float(lat_str.replace('°N', ''))
-                    elif '°S' in lat_str:
-                        lat = -float(lat_str.replace('°S', ''))
-                    else:
-                        lat = 0.0
-                    
-                    # Parse longitude (format: "XX.XX°E" or similar)
-                    if '°E' in lon_str:
-                        lon = float(lon_str.replace('°E', ''))
-                    elif '°W' in lon_str:
-                        lon = -float(lon_str.replace('°W', ''))
-                    else:
-                        lon = 0.0
-                
-                lats.append(lat)
-                lons.append(lon)
-            except (ValueError, TypeError):
-                lats.append(0.0)
-                lons.append(0.0)
-        
-        lats = np.array(lats)
-        lons = np.array(lons)
         
         # Filter valid coordinates
         valid_mask = (lats > 36) & (lats < 48) & (lons > 6) & (lons < 19)

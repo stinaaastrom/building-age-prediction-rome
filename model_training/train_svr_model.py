@@ -124,6 +124,23 @@ class SVRModel:
         
         return X_combined, y
 
+    def predict_dataset(self, dataset):
+        """
+        Predicts years for a given dataset.
+        Returns:
+            y_pred: Predicted years
+            y_true: Actual years
+            coords: Coordinates (lat, lon)
+        """
+        X, y_true = self.prepare_data(dataset, training=False)
+        X_scaled = self.scaler.transform(X)
+        y_pred = self.svr.predict(X_scaled)
+        
+        # Extract coords from X (last 2 columns)
+        coords = X[:, -2:] 
+        
+        return y_pred, y_true, coords
+
     def train(self, train_dataset):
         print("Preparing training data...")
         X_train, y_train = self.prepare_data(train_dataset, training=True)

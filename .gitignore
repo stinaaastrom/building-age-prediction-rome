@@ -36,3 +36,4 @@ model_training/cnn_age_model.keras
 
 # Data files
 result_visualization/data/*.csv
+model_training/cnn_fold_*

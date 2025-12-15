@@ -136,7 +136,7 @@ class SceneFilter:
         
         return is_facade, analysis, rejection_reason
     
-    def filter_dataset(self, dataset, min_building_ratio=0.15, min_sky_ratio=0.00, max_interior_ratio=0.4, verbose=True, visualize_rejected=0, dump_images: bool = False):
+    def filter_dataset(self, dataset, min_building_ratio=0.15, min_sky_ratio=0.01, max_interior_ratio=0.4, verbose=True, visualize_rejected=0, dump_images: bool = False):
         """
         Filter a dataset to keep only exterior building facade images.
         More permissive to include distant buildings.
