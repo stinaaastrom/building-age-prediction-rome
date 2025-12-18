@@ -42,10 +42,10 @@ def main():
         # Balance training dataset
         # Note: In K-Fold, we don't have a separate 'valid' set to augment from unless we set one aside.
         # We will just use the downsampling balancing here.
-        train_dataset = balance_dataset(train_dataset, model_type='svr')
+        train_dataset = balance_dataset(train_dataset, model_type='cnn')
         
         # Train model
-        model = train_model('svr', train_dataset, use_cache=True, model_filename=f'svm_fold_{fold+1}.joblib')
+        model = train_model('cnn', train_dataset, use_cache=True, model_filename=f'cnn_fold_{fold+1}.keras')
         
         # Evaluate
         print(f"Evaluating Fold {fold+1}...")
@@ -68,12 +68,12 @@ def main():
 
     # 2. Predictions (on test set)
     print("\n--- Visualizing Predictions ---")
-    visualizer = PredictionVisualizer(model, model_type='svr')
+    visualizer = PredictionVisualizer(model, model_type='cnn')
     visualizer.visualize(test_dataset, num_samples=3)
 
     # 3. Confusion Matrix
     print("\n--- Generating Confusion Matrix ---")
-    cm_analyzer = AgeConfusionMatrix(model, model_type='svr')
+    cm_analyzer = AgeConfusionMatrix(model, model_type='cnn')
     cm_analyzer.compute_confusion_matrix(test_dataset)
     cm_analyzer.analyze_errors_by_period(test_dataset)
 
@@ -225,7 +225,7 @@ def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, us
             if use_cache and model.load_model(model_path):
                 print("Skipping training as cached model was loaded.")
             else:
-                model.train_cnn(train_dataset, val_dataset=provide_dataset('valid', use_cache=True), epochs=20, batch_size=64)
+                model.train_cnn(train_dataset, val_dataset=provide_dataset('valid', use_cache=True), batch_size=64)
                 model.save_model(model_path)
         
         case 'gbm':
