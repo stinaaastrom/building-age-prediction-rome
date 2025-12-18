@@ -1,39 +1,38 @@
-reading/*
+# Python Standard
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-# Images and data files
-year_guessr_data/
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.tiff
-result_visualization/pictures/*.png
-result_visualization/pictures/*.jpg
-scene_filter_test_*.png
-rejected_images_visualization.png
-
-# Virtual environments
-venv/
-.venv/
+# Environments
+.env
+.venv
 env/
+venv/
 ENV/
-__pycache__/*
-dataset_preparation/__pycache__/*
-model_training/__pycache__/*
-result_visualization/__pycache__/*
-result_visualization/.DS_Store
-resources/.DS_Store
+.conda/
+
+# IDE & OS
+.vscode/
+.idea/
 .DS_Store
-tools/__pycache__/*
+Thumbs.db
 
-# Model files
-model_training/cached_model.joblib
-model_training/cnn_age_model.keras
-*.h5
-*.pkl
+# Project Specific - Cache & Temporary Data
+dataset_preparation/cache/
+dataset_preparation/__pycache__/
+
+# Generated Results & Visualizations
+result_visualization/data/
+result_visualization/pictures/
+result_visualization/__pycache__/
+
+# Large Model Files
+*.keras
 *.joblib
+*.h5
 
-# Data files
-result_visualization/data/*.csv
-model_training/cnn_fold_*
+# Logs and temporary files
+*.log
+reading/
