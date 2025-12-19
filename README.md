@@ -1,27 +1,55 @@
-# building-age-prediction-rome
+# Building Age Prediction - Rome
 
-## Data: Italy borders GeoJSON
+This project aims to predict the construction year of buildings in Rome using images and geographical data. It employs various machine learning approaches, including Convolutional Neural Networks (CNN), Support Vector Machines (SVM), and Gradient Boosting Models (GBM).
 
-The file `italy_borders.geojson` in this repository was extracted from the public
-countries GeoJSON maintained in the `datasets/geo-countries` GitHub repository.
+## Project Structure
 
-Source URL used to obtain the full countries GeoJSON:
+The repository is organized modularly:
 
+*   **`main.py`**: The main entry point for training and evaluating the models. This is where K-Fold Cross-Validation is controlled.
+*   **`dataset_preparation/`**: Scripts for preparing, filtering, and processing the dataset.
+    *   `image_processing.py`: Image preprocessing for CNNs and other models.
+    *   `filter_italy_dataset.py`: Filters relevant data from the complete dataset.
+*   **`model_training/`**: Contains the training logic for the different models.
+    *   `train_cnn_model.py`: Training the CNN (based on DenseNet/EfficientNet).
+    *   `train_gradient_boosting_model.py`: Training the GBM.
+    *   `train_svr_model.py`: Training the Support Vector Regression.
+    *   Also contains saved models (`.keras`, `.joblib`).
+*   **`result_visualization/`**: Tools for analyzing and visualizing the results.
+    *   `visualize_predictions.py`: Shows predictions compared to ground truth.
+    *   `visualize_errors_geographically.py`: Maps prediction errors on a map.
+    *   `find_worst_predictions.py`: Identifies the largest outliers.
+*   **`dataset_exploration/`**: SQL queries and GeoJSON files for data exploration.
+*   **`resources/`**: Geographical borders and helper files (e.g., `italy_borders.geojson`).
+
+## Installation
+
+1.  Clone the repository.
+2.  Create a virtual environment (recommended):
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # Mac/Linux
+    # or
+    .\venv\Scripts\activate   # Windows
+    ```
+3.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+## Usage
+
+To start training and evaluation, run `main.py`:
+
+```bash
+python main.py
 ```
-https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson
-```
 
-This GeoJSON is used by `filter_Italy_dataset.py` (via Shapely) to perform precise
-point-in-polygon checks to determine whether image coordinates fall within Italy's
-official land boundaries.
+In `main.py`, various parameters can be configured, such as the model type to use (`gbm`, `cnn`, `svr`) or the number of folds for cross-validation.
 
-The visual of the Italian borders is taken from a geojson.io render based on the extracted
-polygon edges.
+## Models
 
-Known issues:
-- too few images (more would be better)
-- pictures of construction sites (Church of Gesù, Mirandola)
-- aerial pictures not showing much façade (Vatican Museums)
-- pictures from inside the building (Palaindoor di Ancona)
-- drawings of buildings (San Sebastiano, Milan)
-- 'feature-sparse' buildings with smooth surfaces (Basilica of Santa Maria a Pie' di Chienti)
+The project currently supports the following model architectures:
+*   **CNN**: Deep Learning approach for direct image analysis.
+*   **SVR**: Support Vector Regression on extracted features.
+*   **GBM**: Gradient Boosting for tabular/feature-based predictions.

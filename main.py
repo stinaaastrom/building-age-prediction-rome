@@ -14,7 +14,7 @@ from typing import Literal
 import pickle
 import random
 from datasets import concatenate_datasets
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 import numpy as np
 
 CACHE_DIR = Path.cwd() / 'dataset_preparation' / 'cache'
@@ -22,8 +22,9 @@ CACHE_DIR = Path.cwd() / 'dataset_preparation' / 'cache'
 def main():
     # K-Fold Cross Validation on full dataset
     print("\n=== Starting K-Fold Cross Validation ===")
-    full_dataset = provide_dataset('wiki_dataset', use_cache=True, balance=False)
+    full_dataset = provide_dataset('wiki_dataset', use_cache=True)
     
+    model_type = 'gbm' # Options: 'svr', 'cnn', 'gbm'
     k_folds = 5
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=42)
     
@@ -36,16 +37,21 @@ def main():
         print(f"\n--- Fold {fold+1}/{k_folds} ---")
         
         # Create train/test splits for this fold
-        train_dataset = full_dataset.select(train_idx)
+        # Split train_idx into train and validation (e.g. 80/20) for models that need it
+        train_indices, val_indices = train_test_split(train_idx, test_size=0.2, random_state=42)
+        
+        train_dataset = full_dataset.select(train_indices)
+        val_dataset = full_dataset.select(val_indices)
         test_dataset = full_dataset.select(test_idx)
         
         # Balance training dataset
-        # Note: In K-Fold, we don't have a separate 'valid' set to augment from unless we set one aside.
         # We will just use the downsampling balancing here.
-        train_dataset = balance_dataset(train_dataset, model_type='cnn')
+        train_dataset = balance_dataset(train_dataset)
         
         # Train model
-        model = train_model('cnn', train_dataset, use_cache=True, model_filename=f'cnn_fold_{fold+1}.keras')
+        extension = 'keras' if model_type == 'cnn' else 'joblib'
+        model_filename = f'{model_type}_fold_{fold+1}.{extension}'
+        model = train_model(model_type, train_dataset, val_dataset=val_dataset, use_cache=True, model_filename=model_filename)
         
         # Evaluate
         print(f"Evaluating Fold {fold+1}...")
@@ -68,12 +74,12 @@ def main():
 
     # 2. Predictions (on test set)
     print("\n--- Visualizing Predictions ---")
-    visualizer = PredictionVisualizer(model, model_type='cnn')
+    visualizer = PredictionVisualizer(model, model_type)
     visualizer.visualize(test_dataset, num_samples=3)
 
     # 3. Confusion Matrix
     print("\n--- Generating Confusion Matrix ---")
-    cm_analyzer = AgeConfusionMatrix(model, model_type='cnn')
+    cm_analyzer = AgeConfusionMatrix(model, model_type)
     cm_analyzer.compute_confusion_matrix(test_dataset)
     cm_analyzer.analyze_errors_by_period(test_dataset)
 
@@ -93,39 +99,9 @@ def main():
     worst_finder = WorstPredictionsFinder(model)
     worst_finder.find_worst(test_dataset)
 
-def balance_dataset(dataset, valid_dataset=None, model_type='svr'):
+def balance_dataset(dataset):
     print("\n--- Balancing dataset by period ---")
     period_visualizer = PeriodDistributionVisualizer()
-    
-    # Augment underrepresented periods with validation data (only for SVR training)
-    if valid_dataset and model_type == 'svr':
-        print("\n--- Augmenting underrepresented periods with validation data ---")
-        # Calculate current distribution
-        period_counts = {}
-        years = dataset['Year']
-        for year in years:
-            p = period_visualizer._get_period(year)
-            if p is not None:
-                period_counts[p] = period_counts.get(p, 0) + 1
-        
-        if period_counts:
-            max_count = max(period_counts.values())
-            
-            indices_to_add = []
-            valid_years = valid_dataset['Year']
-            for idx, year in enumerate(valid_years):
-                p = period_visualizer._get_period(year)
-                if p is not None:
-                    # Add sample if it belongs to an underrepresented period
-                    if period_counts.get(p, 0) < max_count:
-                        indices_to_add.append(idx)
-            
-            if indices_to_add:
-                print(f"Adding {len(indices_to_add)} samples from validation dataset.")
-                augment_data = valid_dataset.select(indices_to_add)
-                dataset = concatenate_datasets([dataset, augment_data])
-            else:
-                print("No suitable samples found in validation dataset to augment underrepresented periods.")
 
     period_indices = {}
     
@@ -154,7 +130,7 @@ def balance_dataset(dataset, valid_dataset=None, model_type='svr'):
         
     return dataset
 
-def provide_dataset(dataset_type: Literal['train','test','valid','wiki_dataset'], use_cache: bool = True, model_type: str = None, balance: bool = True):
+def provide_dataset(dataset_type: Literal['train','test','valid','wiki_dataset'], use_cache: bool = True, model_type: str = None):
     print("\n--- Loading, Filtering by Geography and Applying Facade Detection Filter ---")
     # Check for cached dataset
     cache_path = CACHE_DIR / f'{dataset_type}_dataset.pkl'
@@ -175,24 +151,10 @@ def provide_dataset(dataset_type: Literal['train','test','valid','wiki_dataset']
 
     print("Filtering datasets to keep only exterior building facades:")
     print("  - Excludes interior shots (walls, floors, ceilings dominant)")
-    print("  - Requires visible sky (exterior indicator)")
 
     # Handle wiki_dataset (full dataset)
     dataset = italy_data.get_filtered_dataset(split=dataset_type)
     dataset = scene_filter.filter_dataset(dataset)
-
-    if balance:
-        # For standard train split, we might want to augment from valid if available
-        valid_dataset = None
-        if dataset_type == 'train' and model_type == 'svr':
-             # Try to load valid dataset for augmentation
-             try:
-                 print("Loading validation dataset for augmentation...")
-                 valid_dataset = provide_dataset('valid', use_cache=True, balance=False)
-             except Exception as e:
-                 print(f"Could not load validation dataset for augmentation: {e}")
-
-        dataset = balance_dataset(dataset, valid_dataset=valid_dataset, model_type=model_type)
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     print(f"\n--- Saving {dataset_type} dataset to cache: {cache_path} ---")
@@ -201,8 +163,7 @@ def provide_dataset(dataset_type: Literal['train','test','valid','wiki_dataset']
 
     return dataset
     
-
-def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, use_cache: bool = True, model_filename: str = None):
+def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, val_dataset=None, use_cache: bool = True, model_filename: str = None):
     print("\n--- Starting Training ---")
     
     match training_method:
@@ -214,7 +175,14 @@ def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, us
             if use_cache and model.load_model(model_path):
                 print("Skipping training as cached model was loaded.")
             else:
-                model.train(train_dataset)
+                # For SVR, combine train and validation sets to maximize training data
+                if val_dataset is not None:
+                    print("Combining train and validation datasets for SVR training...")
+                    combined_train_dataset = concatenate_datasets([train_dataset, val_dataset])
+                else:
+                    combined_train_dataset = train_dataset
+
+                model.train(combined_train_dataset)
                 model.save_model(model_path)
         
         case 'cnn':
@@ -225,7 +193,7 @@ def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, us
             if use_cache and model.load_model(model_path):
                 print("Skipping training as cached model was loaded.")
             else:
-                model.train_cnn(train_dataset, val_dataset=provide_dataset('valid', use_cache=True), batch_size=64)
+                model.train_cnn(train_dataset, val_dataset=val_dataset, epochs=20, batch_size=64)
                 model.save_model(model_path)
         
         case 'gbm':
@@ -236,11 +204,10 @@ def train_model(training_method: Literal['svr', 'cnn', 'gbm'], train_dataset, us
             if use_cache and model.load_model(model_path):
                 print("Skipping training as cached model was loaded.")
             else:
-                model.train(train_dataset, val_dataset=provide_dataset('valid', use_cache=True))
+                model.train(train_dataset, val_dataset=val_dataset)
                 model.save_model(model_path)
     
     return model
-
 
 if __name__ == "__main__":
     main()

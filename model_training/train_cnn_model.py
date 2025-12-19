@@ -86,6 +86,28 @@ class CNNModel:
         print(f"Prepared {len(X_images)} samples with image shape {X_images.shape} and coords shape {X_coords.shape}")
         return X_images, X_coords, y
 
+    def predict_dataset(self, dataset):
+        """
+        Predicts years for a given dataset.
+        Returns:
+            y_pred: Predicted years
+            y_true: Actual years
+            coords: Coordinates (lat, lon)
+        """
+        X_images, X_coords, y_norm = self.prepare_cnn_data(dataset, fit_stats=False)
+        
+        # Predict
+        y_pred_norm = self.cnn_model.predict([X_images, X_coords])
+        y_pred = self.denormalize_year(y_pred_norm).flatten()
+        
+        # Denormalize y_true
+        y_true = self.denormalize_year(y_norm)
+        
+        # Denormalize coords
+        coords = X_coords * self.coord_std + self.coord_mean
+        
+        return y_pred, y_true, coords
+
     def build_cnn_model(self, input_shape=(224,224, 3)):
         """Build CNN model with DenseNet121 backbone + coordinate metadata"""
         # Image input branch - DenseNet121 as feature extractor

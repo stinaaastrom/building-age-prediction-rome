@@ -56,30 +56,13 @@ class AgeConfusionMatrix:
                 return idx
         return -1  # Out of range
     
-    def _get_predictions_svr(self, dataset):
-        """Get predictions using SVR model."""
-        X_test, y_test = self.model.prepare_data(dataset, training=False)
-        
-        # Scale features if scaler exists
-        if hasattr(self.model, 'scaler'):
-            X_test = self.model.scaler.transform(X_test)
-            
-        y_pred = self.model.svr.predict(X_test)
-        return y_test, y_pred
-    
-    def _get_predictions_cnn(self, dataset):
-        """Get predictions using CNN model."""
-        X_test_imgs, X_test_coords, y_test_norm = self.model.prepare_data(
-            dataset, 
-            image_size=(224, 224), 
-            use_augmentation=False
-        )
-        
-        predictions_norm = self.model.cnn_model.predict([X_test_imgs, X_test_coords], verbose=0).flatten()
-        predictions = self.model.denormalize_year(predictions_norm)
-        y_test = self.model.denormalize_year(y_test_norm)
-        
-        return y_test, predictions
+    def _get_predictions(self, dataset):
+        """Get predictions using the unified predict_dataset method."""
+        if hasattr(self.model, 'predict_dataset'):
+            y_pred, y_true, _ = self.model.predict_dataset(dataset)
+            return y_true, y_pred
+        else:
+            raise AttributeError("Model does not support predict_dataset method.")
     
     def compute_confusion_matrix(self, dataset):
         """
@@ -90,17 +73,12 @@ class AgeConfusionMatrix:
         """
         print("\n--- Computing Confusion Matrix for Age Periods ---")
         
-        # Get predictions based on model type
-        if self.model_type == 'svr':
-            y_true, y_pred = self._get_predictions_svr(dataset)
-            # SVR predicts years, so we map them to periods
-            y_true_periods = np.array([self._assign_period(year) for year in y_true])
-            y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
-        else:
-            y_true, y_pred = self._get_predictions_cnn(dataset)
-            # CNN still predicts years, so we map them
-            y_true_periods = np.array([self._assign_period(year) for year in y_true])
-            y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
+        # Get predictions
+        y_true, y_pred = self._get_predictions(dataset)
+        
+        # Map to periods
+        y_true_periods = np.array([self._assign_period(year) for year in y_true])
+        y_pred_periods = np.array([self._assign_period(year) for year in y_pred])
         
         # Filter out any out-of-range predictions
         valid_mask = (y_true_periods >= 0) & (y_pred_periods >= 0)
@@ -148,8 +126,6 @@ class AgeConfusionMatrix:
         filepath = output_path / (filename + '.png')
         plt.savefig(filepath, dpi=150, bbox_inches='tight')
         print(f"Saved confusion matrix to {filepath}")
-        plt.show()
-        plt.close()
         
         # Print classification report
         print("\n--- Classification Report by Age Period ---")
@@ -195,11 +171,8 @@ class AgeConfusionMatrix:
         """
         print("\n--- Analyzing Errors by Period ---")
         
-        # Get predictions
-        if self.model_type == 'svr':
-            y_true, y_pred = self._get_predictions_svr(dataset)
-        else:
-            y_true, y_pred = self._get_predictions_cnn(dataset)
+        # Get predictions using unified method
+        y_true, y_pred = self._get_predictions(dataset)
         
         # Calculate errors
         errors = np.abs(y_true - y_pred)
@@ -237,5 +210,3 @@ class AgeConfusionMatrix:
         filepath = output_path / (filename + '.png')
         plt.savefig(filepath, dpi=150, bbox_inches='tight')
         print(f"Saved error distribution to {filepath}")
-        plt.show()
-        plt.close()
